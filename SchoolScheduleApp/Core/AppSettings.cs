@@ -9,6 +9,6 @@ namespace SchoolScheduleApp.Core
         public string StartTime { get; set; } = "08:00";
 
         // Граница для проверки (не обязательно, но удобно)
-        public int MaxLessonDuration => 120;
+        public int MaxLessonDuration => 120;   
     }
 }
