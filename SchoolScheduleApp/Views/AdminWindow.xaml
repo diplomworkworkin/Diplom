@@ -86,7 +86,7 @@
                         </Border>
                         <Button Content="−" Width="40" Height="40" Background="Transparent" Foreground="{DynamicResource SecondaryText}" FontSize="20" BorderThickness="0"
                                 Cursor="Hand" Click="BtnMinimize_Click"/>
-                        <Button Content="✕" Width="40" Height="40" Background="Transparent" Foreground="{DynamicResource SecondaryText}" FontSize="18" BorderThickness="0"
+                        <Button Content="✕" Width="49" Height="40" Background="Transparent" Foreground="{DynamicResource SecondaryText}" FontSize="18" BorderThickness="0"
                                 Cursor="Hand" Click="BtnClose_Click"/>
                     </StackPanel>
                 </Grid>

@@ -7,13 +7,13 @@
 namespace SchoolSchedule.Migrations
 {
     /// <inheritdoc />
-    public partial class TestDb : Migration
+    public partial class test : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Classrooms", 
+                name: "Classrooms",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
@@ -38,24 +38,6 @@ namespace SchoolSchedule.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Subjects", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Users",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Username = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    Password = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    FullName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    TeacherId = table.Column<int>(type: "int", nullable: true),
-                    AcademicClassId = table.Column<int>(type: "int", nullable: true),
-                    Role = table.Column<int>(type: "int", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Users", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -142,6 +124,36 @@ namespace SchoolSchedule.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Users",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Username = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Password = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    FullName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    TeacherId = table.Column<int>(type: "int", nullable: true),
+                    AcademicClassId = table.Column<int>(type: "int", nullable: true),
+                    Role = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Users_AcademicClasses_AcademicClassId",
+                        column: x => x.AcademicClassId,
+                        principalTable: "AcademicClasses",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Users_Teachers_TeacherId",
+                        column: x => x.TeacherId,
+                        principalTable: "Teachers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Workloads",
                 columns: table => new
                 {
@@ -199,12 +211,7 @@ namespace SchoolSchedule.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "Id", "AcademicClassId", "FullName", "Password", "Role", "TeacherId", "Username" },
-                values: new object[,]
-                {
-                    { 1, null, "Системный Администратор", "admin", 0, null, "admin" },
-                    { 2, null, "Петров Петр Петрович", "teacher1", 1, 1, "teacher1" },
-                    { 3, 1, "Ученик 11-А", "student1", 2, null, "student1" }
-                });
+                values: new object[] { 1, null, "Системный Администратор", "admin", 0, null, "admin" });
 
             migrationBuilder.InsertData(
                 table: "Teachers",
@@ -222,6 +229,15 @@ namespace SchoolSchedule.Migrations
                 {
                     { 1, 1, "11-А", 1, 25 },
                     { 2, 2, "9-Б", 2, 28 }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "Id", "AcademicClassId", "FullName", "Password", "Role", "TeacherId", "Username" },
+                values: new object[,]
+                {
+                    { 2, null, "Петров Петр Петрович", "teacher1", 1, 1, "teacher1" },
+                    { 3, 1, "Ученик 11-А", "student1", 2, null, "student1" }
                 });
 
             migrationBuilder.InsertData(
@@ -295,22 +311,6 @@ namespace SchoolSchedule.Migrations
                 name: "IX_Workloads_TeacherId",
                 table: "Workloads",
                 column: "TeacherId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Users_AcademicClasses_AcademicClassId",
-                table: "Users",
-                column: "AcademicClassId",
-                principalTable: "AcademicClasses",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Users_Teachers_TeacherId",
-                table: "Users",
-                column: "TeacherId",
-                principalTable: "Teachers",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
         }
 
         /// <inheritdoc />

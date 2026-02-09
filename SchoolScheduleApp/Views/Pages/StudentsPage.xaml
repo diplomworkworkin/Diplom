@@ -34,7 +34,7 @@
                 <Button Content="+ Добавить класс"
                 Command="{Binding AddClassCommand}"
                 Background="{DynamicResource AccentColor}" Foreground="White" FontWeight="Bold"
-                Padding="15,8" BorderThickness="0" Cursor="Hand">   
+                Padding="15,8" BorderThickness="0" Cursor="Hand" Height="35">   
                     <Button.Resources>
                         <Style TargetType="Border">
                             <Setter Property="CornerRadius" Value="10"/>

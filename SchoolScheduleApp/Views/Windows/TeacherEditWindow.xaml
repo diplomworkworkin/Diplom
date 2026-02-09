@@ -63,7 +63,7 @@
 
                     <Button Content="Сохранить" IsDefault="True" Click="BtnSave_Click"
                             Background="{DynamicResource AccentColor}" Foreground="White" 
-                            FontWeight="Bold" Padding="15,8" BorderThickness="0" Cursor="Hand">
+                            FontWeight="Bold" Padding="15,8" BorderThickness="0" Cursor="Hand" Height="34">
                         <Button.Resources>
                             <Style TargetType="Border">
                                 <Setter Property="CornerRadius" Value="5"/>

@@ -12,8 +12,8 @@ using SchoolSchedule.Context;
 namespace SchoolSchedule.Migrations
 {
     [DbContext(typeof(SchoolDbContext))]
-    [Migration("20260207123950_TestDb")]
-    partial class TestDb
+    [Migration("20260209111725_test")]
+    partial class test
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -251,13 +251,13 @@ namespace SchoolSchedule.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AcademicClassId")
+                        .HasColumnType("int");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
-
-                    b.Property<int?>("AcademicClassId")
-                        .HasColumnType("int");
 
                     b.Property<string>("Password")
                         .IsRequired()
@@ -287,17 +287,14 @@ namespace SchoolSchedule.Migrations
                         new
                         {
                             Id = 1,
-                            AcademicClassId = null,
                             FullName = "Системный Администратор",
                             Password = "admin",
                             Role = 0,
-                            TeacherId = null,
                             Username = "admin"
                         },
                         new
                         {
                             Id = 2,
-                            AcademicClassId = null,
                             FullName = "Петров Петр Петрович",
                             Password = "teacher1",
                             Role = 1,
@@ -311,7 +308,6 @@ namespace SchoolSchedule.Migrations
                             FullName = "Ученик 11-А",
                             Password = "student1",
                             Role = 2,
-                            TeacherId = null,
                             Username = "student1"
                         });
                 });

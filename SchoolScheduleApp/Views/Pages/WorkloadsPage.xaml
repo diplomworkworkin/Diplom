@@ -194,7 +194,7 @@
                             FontWeight="Bold"
                             Padding="16,8"
                             BorderThickness="0"
-                            Cursor="Hand">
+                            Cursor="Hand" Height="35">
                         <Button.Resources>
                             <Style TargetType="Border">
                                 <Setter Property="CornerRadius" Value="8"/>
