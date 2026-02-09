@@ -48,8 +48,6 @@
                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                 <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
-                <Setter Property="materialDesign:ComboBoxAssist.PopupBackground" Value="{DynamicResource CardBackground}"/>
-                <Setter Property="materialDesign:ComboBoxAssist.PopupForeground" Value="{DynamicResource PrimaryText}"/>
             </Style>
 
             <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
