@@ -48,11 +48,22 @@
                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
                 <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+                <Setter Property="materialDesign:ComboBoxAssist.PopupBackground" Value="{DynamicResource CardBackground}"/>
+                <Setter Property="materialDesign:ComboBoxAssist.PopupForeground" Value="{DynamicResource PrimaryText}"/>
             </Style>
 
             <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
                 <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
-                <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
+                <Setter Property="Background" Value="{DynamicResource CardBackground}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource HoverBackground}"/>
+                    </Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource AccentColor}"/>
+                        <Setter Property="Foreground" Value="White"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
 
             <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
