@@ -19,9 +19,13 @@ namespace SchoolScheduleApp.Core
 
         public static ScheduleGenerateResult Generate(bool clearOldSchedule = true)
         {
-            var res = new ScheduleGenerateResult();
-
             using var db = new SchoolDbContext();
+            return Generate(db, clearOldSchedule);
+        }
+
+        public static ScheduleGenerateResult Generate(SchoolDbContext db, bool clearOldSchedule = true)
+        {
+            var res = new ScheduleGenerateResult();
 
             var workloads = db.Workloads
                 .Include(w => w.Subject)
