@@ -104,10 +104,7 @@ namespace SchoolScheduleApp.ViewModels
             var teacher = db.Teachers.FirstOrDefault(t => t.Id == FormTeacherId);
             if (teacher != null && teacher.SubjectId != null && teacher.SubjectId.Value != FormSubjectId)
             {
-                MessageBox.Show(
-                    "Выбранный предмет не соответствует предмету учителя.\n" +
-                    "Проверьте предмет у учителя в разделе \"Учителя\" или выберите другого учителя.",
-                    "Ошибка");
+                ToastService.Show("Выбранный предмет не соответствует предмету учителя. Проверьте предмет у учителя в разделе \"Учителя\" или выберите другого учителя.", "Ошибка", true);
                 return;
             }
             Classes = new ObservableCollection<AcademicClass>(db.AcademicClasses.OrderBy(x => x.Name).ToList());
@@ -189,24 +186,24 @@ namespace SchoolScheduleApp.ViewModels
         {
             if (FormClassId <= 0)
             {
-                MessageBox.Show("Выберите класс.", "Ошибка");
+                ToastService.Show("Выберите класс.", "Ошибка", true);
                 return;
             }
             if (FormTeacherId <= 0)
             {
-                MessageBox.Show("Выберите учителя.", "Ошибка");
+                ToastService.Show("Выберите учителя.", "Ошибка", true);
                 return;
             }
             if (FormSubjectId <= 0)
             {
-                MessageBox.Show("Выберите предмет.", "Ошибка");
+                ToastService.Show("Выберите предмет.", "Ошибка", true);
                 return;
             }
 
             // разумное ограничение для недели (можешь поменять под себя)
             if (FormHoursPerWeek < 1 || FormHoursPerWeek > 10)
             {
-                MessageBox.Show("Часов в неделю должно быть от 1 до 10.", "Ошибка");
+                ToastService.Show("Часов в неделю должно быть от 1 до 10.", "Ошибка", true);
                 return;
             }
 
@@ -217,10 +214,7 @@ namespace SchoolScheduleApp.ViewModels
             var teacher = db.Teachers.FirstOrDefault(t => t.Id == FormTeacherId);
             if (teacher != null && teacher.SubjectId != null && teacher.SubjectId.Value != FormSubjectId)
             {
-                MessageBox.Show(
-                    "Выбранный предмет не соответствует предмету учителя.\n" +
-                    "Проверьте предмет учителя в разделе \"Учителя\" или выберите другого учителя.",
-                    "Ошибка");
+                ToastService.Show("Выбранный предмет не соответствует предмету учителя. Проверьте предмет учителя в разделе \"Учителя\" или выберите другого учителя.", "Ошибка", true);
                 return;
             }
 
@@ -232,7 +226,7 @@ namespace SchoolScheduleApp.ViewModels
 
             if (duplicate)
             {
-                MessageBox.Show("Для этого класса нагрузка по этому предмету уже существует.", "Ошибка");
+                ToastService.Show("Для этого класса нагрузка по этому предмету уже существует.", "Ошибка", true);
                 return;
             }
 
@@ -264,7 +258,7 @@ namespace SchoolScheduleApp.ViewModels
 
             LoadAll();
             ClearForm();
-            MessageBox.Show("Нагрузка сохранена.", "Успешно");
+            ToastService.Show("Нагрузка сохранена.", "Успешно");
         }
 
         private void DeleteWorkload()

@@ -154,10 +154,13 @@
                             CornerRadius="8"
                             Padding="10,6"
                             Margin="0,0,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="10" Height="10" Fill="#00d2ff" Margin="0,0,6,0"/>
-                            <TextBlock Text="Загрузка (среднее): " Foreground="{DynamicResource SecondaryText}" FontSize="12"/>
-                            <TextBlock Text="{Binding RoomLoadPercentText}" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="Bold"/>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="10" Height="10" Fill="#00d2ff" Margin="0,0,6,0"/>
+                                <TextBlock Text="Загрузка (среднее): " Foreground="{DynamicResource SecondaryText}" FontSize="12"/>
+                                <TextBlock Text="{Binding RoomLoadPercentText}" Foreground="{DynamicResource PrimaryText}" FontSize="12" FontWeight="Bold"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding RoomLoadRangeText}" Foreground="{DynamicResource SecondaryText}" FontSize="11" Margin="16,4,0,0"/>
                         </StackPanel>
                     </Border>
                 </Grid>

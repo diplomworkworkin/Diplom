@@ -79,7 +79,7 @@ namespace SchoolScheduleApp.ViewModels
                     return;
                 }
 
-                MessageBox.Show($"Добро пожаловать, {user.FullName}!", "Успех");
+                ToastService.Show($"Добро пожаловать, {user.FullName}!", "Успех");
                 nextWindow.Show();
 
                 foreach (Window window in Application.Current.Windows)

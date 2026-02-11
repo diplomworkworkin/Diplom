@@ -76,7 +76,7 @@ namespace SchoolScheduleApp.ViewModels
             // 1) Уникальность имени класса
             if (db.AcademicClasses.Any(c => c.Name == newClass.Name))
             {
-                MessageBox.Show("Класс с таким названием уже существует.", "Ошибка");
+                ToastService.Show("Класс с таким названием уже существует.", "Ошибка", true);
                 return;
             }
 
@@ -86,7 +86,7 @@ namespace SchoolScheduleApp.ViewModels
                 bool busy = db.AcademicClasses.Any(c => c.CuratorTeacherId == newClass.CuratorTeacherId);
                 if (busy)
                 {
-                    MessageBox.Show("Этот учитель уже назначен куратором другого класса.", "Ошибка");
+                    ToastService.Show("Этот учитель уже назначен куратором другого класса.", "Ошибка", true);
                     return;
                 }
             }
@@ -129,7 +129,7 @@ namespace SchoolScheduleApp.ViewModels
             bool nameExists = db.AcademicClasses.Any(c => c.Name == updated.Name && c.Id != updated.Id);
             if (nameExists)
             {
-                MessageBox.Show("Класс с таким названием уже существует.", "Ошибка");
+                ToastService.Show("Класс с таким названием уже существует.", "Ошибка", true);
                 return;
             }
 
@@ -142,7 +142,7 @@ namespace SchoolScheduleApp.ViewModels
 
                 if (busy)
                 {
-                    MessageBox.Show("Этот учитель уже назначен куратором другого класса.", "Ошибка");
+                    ToastService.Show("Этот учитель уже назначен куратором другого класса.", "Ошибка", true);
                     return;
                 }
             }
@@ -169,7 +169,7 @@ namespace SchoolScheduleApp.ViewModels
             bool hasWorkloads = db.Workloads.Any(w => w.AcademicClassId == ac.Id);
             if (hasWorkloads)
             {
-                MessageBox.Show("Нельзя удалить класс: для него уже задана нагрузка (Workload). Сначала удалите/измените нагрузку.", "Ошибка");
+                ToastService.Show("Нельзя удалить класс: для него уже задана нагрузка (Workload). Сначала удалите/измените нагрузку.", "Ошибка", true);
                 return;
             }
 

@@ -1,16 +1,14 @@
-﻿using SchoolSchedule.Context;
+using SchoolSchedule.Context;
 using SchoolScheduleApp.Core;
 using System;
 using System.Linq;
+using System.Windows;
 using System.Windows.Media;
 
 namespace SchoolScheduleApp.ViewModels
 {
     public class AdminViewModel : ViewModelBase
     {
-        // === ПОЛЯ ДЛЯ ПРИВЯЗКИ (Binding) ===
-        // Эти свойства отображаются на карточках
-
         private int _teachersCount;
         public int TeachersCount
         {
@@ -25,7 +23,7 @@ namespace SchoolScheduleApp.ViewModels
             set { _studentsCount = value; OnPropertyChanged(); }
         }
 
-        private string _scheduleStatus;
+        private string _scheduleStatus = string.Empty;
         public string ScheduleStatus
         {
             get => _scheduleStatus;
@@ -39,8 +37,6 @@ namespace SchoolScheduleApp.ViewModels
             set { _scheduleStatusBrush = value; OnPropertyChanged(); }
         }
 
-        // === ГРАФИК ЗАГРУЖЕННОСТИ АУДИТОРИЙ (в %) ===
-        // Строим линию по дням недели: Пн..Пт
         private PointCollection _roomLoadLine = new();
         public PointCollection RoomLoadLine
         {
@@ -62,6 +58,13 @@ namespace SchoolScheduleApp.ViewModels
             set { _roomLoadPercentText = value; OnPropertyChanged(); }
         }
 
+        private string _roomLoadRangeText = "Диапазон: 0–0%";
+        public string RoomLoadRangeText
+        {
+            get => _roomLoadRangeText;
+            set { _roomLoadRangeText = value; OnPropertyChanged(); }
+        }
+
         public RelayCommand RefreshRoomLoadCommand { get; }
 
         public AdminViewModel()
@@ -74,7 +77,6 @@ namespace SchoolScheduleApp.ViewModels
 
             ScheduleGenerator.ScheduleChanged += OnScheduleChanged;
 
-            // 2. Загрузка данных из БД
             LoadDashboardData();
             LoadRoomLoadChart();
         }
@@ -87,98 +89,106 @@ namespace SchoolScheduleApp.ViewModels
 
         private void LoadDashboardData()
         {
-            // Используем using, чтобы соединение с БД закрывалось сразу после запроса
-            using (var db = new SchoolDbContext())
+            using var db = new SchoolDbContext();
+
+            TeachersCount = db.Teachers.Count();
+            StudentsCount = db.AcademicClasses.Count();
+
+            var hasLessons = db.Lessons.Any();
+            if (hasLessons)
             {
-                // Считаем количество учителей
-                TeachersCount = db.Teachers.Count();
-
-                // Считаем количество классов
-                StudentsCount = db.AcademicClasses.Count();
-
-                // Проверяем статус расписания
-                // Если в таблице Lessons есть хоть одна запись - значит расписание составлено
-                bool hasLessons = db.Lessons.Any();
-
-                if (hasLessons)
-                {
-                    ScheduleStatus = "Готово";
-                    ScheduleStatusBrush = Brushes.LimeGreen;
-                }
-                else
-                {
-                    ScheduleStatus = "Не готово";
-                    ScheduleStatusBrush = Brushes.IndianRed;
-                }
+                ScheduleStatus = "Готово";
+                ScheduleStatusBrush = Brushes.LimeGreen;
+            }
+            else
+            {
+                ScheduleStatus = "Не готово";
+                ScheduleStatusBrush = Brushes.IndianRed;
             }
         }
 
         private void LoadRoomLoadChart()
         {
-            // График строим в координатах Canvas как в твоём макете.
-            // X: 0..800 (5 точек), Y: 20..250
             const double xMax = 800;
             const double yTop = 20;
             const double yBottom = 250;
+            const int maxSlotsPerDay = 12;
 
             using var db = new SchoolDbContext();
-
-            int roomsCount = db.Classrooms.Count();
+            var roomsCount = db.Classrooms.Count();
             if (roomsCount == 0)
             {
                 RoomLoadPercentText = "0%";
+                RoomLoadRangeText = "Диапазон: 0–0%";
                 RoomLoadLine = new PointCollection();
                 RoomLoadArea = new PointCollection();
                 return;
             }
 
-            // Максимум слотов на один кабинет в день.
-            // У тебя LessonIndex используется в пределах 1..12 (две смены).
-            const int maxSlotsPerDay = 12;
-
-            // Считаем % загруженности по дням: (занятые слоты / (кабинеты * максимум)) * 100
-            // Берём только уроки, где указан кабинет.
             var lessonsByDay = db.Lessons
                 .Where(l => l.ClassroomId != null && l.DayOfWeek >= 1 && l.DayOfWeek <= 5)
+                .AsEnumerable()
                 .GroupBy(l => l.DayOfWeek)
-                .Select(g => new { Day = g.Key, Count = g.Count() })
-                .ToList();
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => $"{x.ClassroomId}-{x.LessonIndex}").Distinct().Count());
 
-            double[] percents = new double[5];
-            for (int day = 1; day <= 5; day++)
+            var percents = new double[5];
+            for (var day = 1; day <= 5; day++)
             {
-                int busy = lessonsByDay.FirstOrDefault(x => x.Day == day)?.Count ?? 0;
-                double total = roomsCount * maxSlotsPerDay;
-                percents[day - 1] = total > 0 ? (busy / total) * 100.0 : 0;
+                var busySlots = lessonsByDay.TryGetValue(day, out var value) ? value : 0;
+                var totalSlots = roomsCount * maxSlotsPerDay;
+                percents[day - 1] = totalSlots > 0 ? (busySlots / (double)totalSlots) * 100.0 : 0;
             }
 
-            // среднее значение для подписи
-            double avg = percents.Average();
+            var avg = percents.Average();
+            var min = percents.Min();
+            var max = percents.Max();
+
             RoomLoadPercentText = $"{Math.Round(avg, 1)}%";
+            RoomLoadRangeText = $"Диапазон: {Math.Round(min, 1)}–{Math.Round(max, 1)}%";
 
-            // строим точки
+            var scale = BuildAdaptiveScale(min, max);
             var line = new PointCollection();
-            var area = new PointCollection();
+            var area = new PointCollection { new Point(0, yBottom) };
 
-            double step = xMax / 4.0; // 5 точек => 4 промежутка
-
-            // область начинается снизу слева
-            area.Add(new System.Windows.Point(0, yBottom));
-
-            for (int i = 0; i < 5; i++)
+            var step = xMax / 4.0;
+            for (var i = 0; i < 5; i++)
             {
-                double x = step * i;
-                double y = yBottom - (percents[i] / 100.0) * (yBottom - yTop);
+                var x = step * i;
+                var normalized = (percents[i] - scale.Min) / (scale.Max - scale.Min);
+                normalized = Math.Clamp(normalized, 0, 1);
 
-                line.Add(new System.Windows.Point(x, y));
-                area.Add(new System.Windows.Point(x, y));
+                var y = yBottom - normalized * (yBottom - yTop);
+                line.Add(new Point(x, y));
+                area.Add(new Point(x, y));
             }
 
-            // область закрываем вниз справа
-            area.Add(new System.Windows.Point(xMax, yBottom));
+            area.Add(new Point(xMax, yBottom));
 
             RoomLoadLine = line;
             RoomLoadArea = area;
+        }
+
+        private static (double Min, double Max) BuildAdaptiveScale(double min, double max)
+        {
+            if (Math.Abs(max - min) < 0.001)
+            {
+                var center = min;
+                return (Math.Max(0, center - 5), Math.Min(100, center + 5));
+            }
+
+            var spread = max - min;
+            var pad = Math.Max(1.5, spread * 0.25);
+            var scaledMin = Math.Max(0, min - pad);
+            var scaledMax = Math.Min(100, max + pad);
+
+            if (Math.Abs(scaledMax - scaledMin) < 0.001)
+            {
+                scaledMax = Math.Min(100, scaledMin + 1);
+            }
+
+            return (scaledMin, scaledMax);
         }
     }
 }

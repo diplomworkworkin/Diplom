@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SchoolSchedule.Context;
 using SchoolScheduleApp.Core;
 using System;
@@ -75,19 +75,19 @@ namespace SchoolScheduleApp.ViewModels
             // небольшая валидация, чтобы в дипломе выглядело логично
             if (string.IsNullOrWhiteSpace(SchoolName))
             {
-                MessageBox.Show("Название учреждения не может быть пустым.", "Ошибка");
+                ToastService.Show("Название учреждения не может быть пустым.", "Ошибка", true);
                 return;
             }
 
             if (LessonDuration <= 0 || LessonDuration > _settings.MaxLessonDuration)
             {
-                MessageBox.Show("Некорректная длительность урока.", "Ошибка");
+                ToastService.Show("Некорректная длительность урока.", "Ошибка", true);
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(StartTime) || !TimeSpan.TryParse(StartTime, out _))
             {
-                MessageBox.Show("Начало первого урока должно быть в формате ЧЧ:ММ (например 08:00).", "Ошибка");
+                ToastService.Show("Начало первого урока должно быть в формате ЧЧ:ММ (например 08:00).", "Ошибка", true);
                 return;
             }
 
@@ -98,7 +98,7 @@ namespace SchoolScheduleApp.ViewModels
 
             AppSettingsService.Save(_settings);
 
-            MessageBox.Show("Настройки сохранены (settings.json).", "Система", MessageBoxButton.OK, MessageBoxImage.Information);
+            ToastService.Show("Настройки сохранены (settings.json).", "Система");
         }
 
         private void ExecuteBackup()
@@ -118,15 +118,11 @@ namespace SchoolScheduleApp.ViewModels
                 var sql = $"BACKUP DATABASE [School11_Schedule_DB] TO DISK = N'{fullPath}' WITH INIT";
                 db.Database.ExecuteSqlRaw(sql);
 
-                MessageBox.Show($"Бэкап создан:\n{fullPath}", "Бэкап", MessageBoxButton.OK, MessageBoxImage.Information);
+                ToastService.Show($"Бэкап создан: {fullPath}", "Бэкап");
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Не удалось создать бэкап.\n\n" + ex.Message,
-                    "Ошибка",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ToastService.Show("Не удалось создать бэкап. " + ex.Message, "Ошибка", true);
             }
         }
     }

@@ -1,4 +1,4 @@
-using SchoolScheduleApp.Core;
+﻿using SchoolScheduleApp.Core;
 using SchoolScheduleApp.Views.Pages;
 using System;
 using System.Windows;
@@ -73,6 +73,10 @@ namespace SchoolScheduleApp.Views
 
         private void BtnMinimize_Click(object sender, RoutedEventArgs e)
             => WindowState = WindowState.Minimized;
+
+
+        private void BtnMaximize_Click(object sender, RoutedEventArgs e)
+            => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
         private void BtnLogout_Click(object sender, RoutedEventArgs e)
         {

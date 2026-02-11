@@ -1,5 +1,6 @@
 ﻿using SchoolSchedule.Context;
 using SchoolSchedule.Entites;
+using SchoolScheduleApp.Core;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -75,21 +76,21 @@ namespace SchoolScheduleApp.Views.Windows
             string pattern = @"^(?:[1-9]|1[0-1])-[А-ЯЁ]$";
             if (!Regex.IsMatch(AcademicClass.Name, pattern))
             {
-                MessageBox.Show("Название должно быть в формате: 1-А, 2-Б, ... 11-В (цифра + дефис + русская буква).", "Ошибка");
+                ToastService.Show("Название должно быть в формате: 1-А, 2-Б, ... 11-В (цифра + дефис + русская буква).", "Ошибка", true);
                 return;
             }
 
             // 3) Кол-во учеников: 1..30
             if (AcademicClass.StudentCount < 1 || AcademicClass.StudentCount > 30)
             {
-                MessageBox.Show("Количество учеников должно быть от 1 до 30.", "Ошибка");
+                ToastService.Show("Количество учеников должно быть от 1 до 30.", "Ошибка", true);
                 return;
             }
 
             // 4) Смена: 1 или 2
             if (AcademicClass.Shift != 1 && AcademicClass.Shift != 2)
             {
-                MessageBox.Show("Смена должна быть 1 или 2.", "Ошибка");
+                ToastService.Show("Смена должна быть 1 или 2.", "Ошибка", true);
                 return;
             }
 
