@@ -177,7 +177,7 @@
                             Foreground="{DynamicResource AccentColor}"
                             FontWeight="SemiBold"
                             Cursor="Hand"
-                            Click="BtnManualEdit_Click"/>
+                            Click="BtnManualEdit_Click" Height="38"/>
 
                     <!-- КНОПКА АВТОСОСТАВЛЕНИЯ -->
                     <Button Content="⚡ Авто-составление"

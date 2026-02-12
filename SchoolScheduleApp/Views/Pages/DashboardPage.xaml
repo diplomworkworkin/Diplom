@@ -116,11 +116,11 @@
                     </Viewbox>
 
                     <!-- Кнопка обновления + легенда справа сверху -->
-                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,0,0">
+                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-35,0,0">
                         <Button Content="↻"
-                                Width="54"
-                                Height="34"
-                                Margin="0,0,8,8"
+                                Width="43"
+                                Height="30"
+                                Margin="100,0,-25,5"
                                 HorizontalAlignment="Center"
                                 Command="{Binding RefreshRoomLoadCommand}"
                                 Background="Transparent"

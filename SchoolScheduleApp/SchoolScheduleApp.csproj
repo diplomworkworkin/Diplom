@@ -6,7 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+	<ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\app.ico" />
+    <None Remove="Assets\app1.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.23" />
@@ -20,6 +26,8 @@
 
   <ItemGroup>
     <Resource Include="Assets\1.png" />
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\app1.ico" />
   </ItemGroup>
 
 </Project>

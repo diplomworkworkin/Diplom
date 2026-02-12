@@ -88,7 +88,6 @@ namespace SchoolSchedule.Migrations
                         .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("Type")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 

@@ -12,7 +12,7 @@ using SchoolSchedule.Context;
 namespace SchoolSchedule.Migrations
 {
     [DbContext(typeof(SchoolDbContext))]
-    [Migration("20260209111725_test")]
+    [Migration("20260212083643_test")]
     partial class test
     {
         /// <inheritdoc />
@@ -91,7 +91,6 @@ namespace SchoolSchedule.Migrations
                         .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("Type")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
