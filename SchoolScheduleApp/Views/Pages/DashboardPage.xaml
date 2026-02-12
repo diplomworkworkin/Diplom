@@ -88,13 +88,13 @@
                 </Grid.RowDefinitions>
 
                 <!-- Шапка -->
-                <DockPanel Grid.Row="0" Margin="25,22,25,0">
+                <DockPanel Grid.Row="0" Margin="25,12,25,0">
                     <TextBlock Text="Аналитика загруженности аудиторий" 
                                Foreground="{DynamicResource PrimaryText}" FontSize="16" FontWeight="Bold"
                                DockPanel.Dock="Left"/>
                 </DockPanel>
 
-                <Grid Grid.Row="1" Margin="20,15,20,20">
+                <Grid Grid.Row="1" Margin="20,6,20,20">
                     <Viewbox Stretch="Uniform">
                         <Canvas Width="800" Height="250">
                             <!-- Заливка под линией -->
@@ -116,7 +116,7 @@
                     </Viewbox>
 
                     <!-- Кнопка обновления + легенда справа сверху -->
-                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,0,0">
                         <Button Content="↻"
                                 Width="54"
                                 Height="34"
