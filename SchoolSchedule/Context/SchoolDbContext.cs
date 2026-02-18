@@ -13,7 +13,7 @@ namespace SchoolSchedule.Context
         public SchoolDbContext()
         {
         }
-
+                  
         public SchoolDbContext(DbContextOptions<SchoolDbContext> options) : base(options)
         {
             // EnsureCreated не используем, так как проект работает через миграции (Database.Migrate)
