@@ -10,8 +10,8 @@ namespace SchoolSchedule.Entites
         public int Id { get; set; }
 
         [Required]
-        [MaxLength(10)]
-        public string Number { get; set; } = string.Empty; // "101", "205А"
+        [MaxLength(50)]
+        public string Number { get; set; } = string.Empty; // "101", "205А", "Актовый зал"
 
         public int Capacity { get; set; } // Вместимость (человек)
 
