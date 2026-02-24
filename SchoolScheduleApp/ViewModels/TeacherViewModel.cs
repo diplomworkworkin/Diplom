@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SchoolSchedule.Context;
 using SchoolSchedule.Entites;
 using SchoolScheduleApp.Core;
@@ -44,17 +44,20 @@ namespace SchoolScheduleApp.ViewModels
         {
             using var db = new SchoolDbContext();
 
+            // Статус "Активен" только если у учителя есть нагрузка (Workloads) или уроки в расписании (Lessons)
             var activeTeacherIds = db.Workloads
                 .Select(w => w.TeacherId)
                 .Distinct()
                 .ToHashSet();
 
-            foreach (var userTeacherId in db.Users
-                         .Where(u => u.TeacherId != null)
-                         .Select(u => u.TeacherId!.Value)
-                         .Distinct())
+            var lessonTeacherIds = db.Lessons
+                .Select(l => l.TeacherId)
+                .Distinct()
+                .ToList();
+
+            foreach (var id in lessonTeacherIds)
             {
-                activeTeacherIds.Add(userTeacherId);
+                activeTeacherIds.Add(id);
             }
 
             var teacherRows = db.Teachers
@@ -86,7 +89,20 @@ namespace SchoolScheduleApp.ViewModels
             {
                 using var db = new SchoolDbContext();
                 db.Teachers.Add(wnd.Teacher);
+                db.SaveChanges(); // Сохраняем учителя, чтобы получить его Id
+
+                // Создаем учетную запись для учителя
+                var user = new User
+                {
+                    Username = $"teacher{wnd.Teacher.Id}",
+                    Password = $"teacher{wnd.Teacher.Id}",
+                    FullName = wnd.Teacher.FullName,
+                    Role = UserRole.Teacher,
+                    TeacherId = wnd.Teacher.Id
+                };
+                db.Users.Add(user);
                 db.SaveChanges();
+
                 LoadData();
             }
         }
@@ -118,8 +134,15 @@ namespace SchoolScheduleApp.ViewModels
             fromDb.FullName = editable.FullName;
             fromDb.SubjectId = editable.SubjectId;
             fromDb.ClassroomId = editable.ClassroomId;
-            db.SaveChanges();
 
+            // Обновляем имя пользователя в учетной записи
+            var user = db.Users.FirstOrDefault(u => u.TeacherId == fromDb.Id);
+            if (user != null)
+            {
+                user.FullName = fromDb.FullName;
+            }
+
+            db.SaveChanges();
             LoadData();
         }
 
@@ -138,6 +161,13 @@ namespace SchoolScheduleApp.ViewModels
             using var db = new SchoolDbContext();
             var fromDb = db.Teachers.FirstOrDefault(t => t.Id == teacher.Id);
             if (fromDb == null) return;
+
+            // Удаляем связанные учетные записи пользователей
+            var relatedUsers = db.Users.Where(u => u.TeacherId == fromDb.Id).ToList();
+            if (relatedUsers.Any())
+            {
+                db.Users.RemoveRange(relatedUsers);
+            }
 
             db.Teachers.Remove(fromDb);
             db.SaveChanges();
