@@ -4,7 +4,7 @@
 
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
-namespace SchoolSchedule.Migrations
+namespace SchoolScheduleApp.Data.Migrations
 {
     /// <inheritdoc />
     public partial class test : Migration

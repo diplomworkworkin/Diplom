@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using SchoolSchedule.Context;
+using SchoolScheduleApp.Data.Context;
 
 #nullable disable
 
-namespace SchoolSchedule.Migrations
+namespace SchoolScheduleApp.Data.Migrations
 {
     [DbContext(typeof(SchoolDbContext))]
     [Migration("20260212083643_test")]
@@ -25,7 +25,7 @@ namespace SchoolSchedule.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("SchoolSchedule.Entites.AcademicClass", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.AcademicClass", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -74,7 +74,7 @@ namespace SchoolSchedule.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Classroom", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Classroom", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -122,7 +122,7 @@ namespace SchoolSchedule.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Lesson", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Lesson", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -165,7 +165,7 @@ namespace SchoolSchedule.Migrations
                     b.ToTable("Lessons");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Subject", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Subject", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -205,7 +205,7 @@ namespace SchoolSchedule.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Teacher", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Teacher", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -242,7 +242,7 @@ namespace SchoolSchedule.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.User", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -311,7 +311,7 @@ namespace SchoolSchedule.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Workload", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Workload", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -376,9 +376,9 @@ namespace SchoolSchedule.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.AcademicClass", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.AcademicClass", b =>
                 {
-                    b.HasOne("SchoolSchedule.Entites.Teacher", "CuratorTeacher")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Teacher", "CuratorTeacher")
                         .WithMany()
                         .HasForeignKey("CuratorTeacherId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -386,25 +386,25 @@ namespace SchoolSchedule.Migrations
                     b.Navigation("CuratorTeacher");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Lesson", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Lesson", b =>
                 {
-                    b.HasOne("SchoolSchedule.Entites.AcademicClass", "AcademicClass")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.AcademicClass", "AcademicClass")
                         .WithMany()
                         .HasForeignKey("AcademicClassId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SchoolSchedule.Entites.Classroom", "Classroom")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Classroom", "Classroom")
                         .WithMany()
                         .HasForeignKey("ClassroomId");
 
-                    b.HasOne("SchoolSchedule.Entites.Subject", "Subject")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Subject", "Subject")
                         .WithMany()
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SchoolSchedule.Entites.Teacher", "Teacher")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Teacher", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -419,9 +419,9 @@ namespace SchoolSchedule.Migrations
                     b.Navigation("Teacher");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Teacher", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Teacher", b =>
                 {
-                    b.HasOne("SchoolSchedule.Entites.Subject", "Subject")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Subject", "Subject")
                         .WithMany()
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -429,14 +429,14 @@ namespace SchoolSchedule.Migrations
                     b.Navigation("Subject");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.User", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.User", b =>
                 {
-                    b.HasOne("SchoolSchedule.Entites.AcademicClass", "AcademicClass")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.AcademicClass", "AcademicClass")
                         .WithMany()
                         .HasForeignKey("AcademicClassId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("SchoolSchedule.Entites.Teacher", "Teacher")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Teacher", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -446,21 +446,21 @@ namespace SchoolSchedule.Migrations
                     b.Navigation("Teacher");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Workload", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Workload", b =>
                 {
-                    b.HasOne("SchoolSchedule.Entites.AcademicClass", "AcademicClass")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.AcademicClass", "AcademicClass")
                         .WithMany("Workloads")
                         .HasForeignKey("AcademicClassId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SchoolSchedule.Entites.Subject", "Subject")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Subject", "Subject")
                         .WithMany()
                         .HasForeignKey("SubjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SchoolSchedule.Entites.Teacher", "Teacher")
+                    b.HasOne("SchoolScheduleApp.Data.Entites.Teacher", "Teacher")
                         .WithMany("Workloads")
                         .HasForeignKey("TeacherId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -473,12 +473,12 @@ namespace SchoolSchedule.Migrations
                     b.Navigation("Teacher");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.AcademicClass", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.AcademicClass", b =>
                 {
                     b.Navigation("Workloads");
                 });
 
-            modelBuilder.Entity("SchoolSchedule.Entites.Teacher", b =>
+            modelBuilder.Entity("SchoolScheduleApp.Data.Entites.Teacher", b =>
                 {
                     b.Navigation("Workloads");
                 });

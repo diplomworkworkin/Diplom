@@ -1,4 +1,4 @@
-using SchoolSchedule.Context;
+using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Core;
 using System;
 using System.Linq;

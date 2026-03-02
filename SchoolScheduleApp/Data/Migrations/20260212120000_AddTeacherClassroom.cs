@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace SchoolSchedule.Migrations
+namespace SchoolScheduleApp.Data.Migrations
 {
     public partial class AddTeacherClassroom : Migration
     {

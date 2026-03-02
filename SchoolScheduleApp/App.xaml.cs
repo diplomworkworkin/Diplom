@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using SchoolSchedule.Context;
+using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Core;
 using System.Windows;
 

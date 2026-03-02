@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using SchoolSchedule.Entites;
+using SchoolScheduleApp.Data.Entites;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SchoolSchedule.Context
+namespace SchoolScheduleApp.Data.Context
 {
     public class SchoolDbContext : DbContext
     {

@@ -1,4 +1,4 @@
-using SchoolSchedule.Entites;
+using SchoolScheduleApp.Data.Entites;
 
 namespace SchoolScheduleApp.Core
 {

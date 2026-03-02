@@ -5,6 +5,11 @@ from app.core.database import get_db
 from app.models.database import Subject, Teacher, AcademicClass, Classroom, Lesson, User
 from app.schemas import schemas
 
+from app.core.database import engine
+from app.models.database import Base
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(title="School Schedule API", description="API for managing school schedules and resources")
 
 @app.get("/")

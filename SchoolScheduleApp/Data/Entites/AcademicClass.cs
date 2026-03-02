@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SchoolSchedule.Entites
+namespace SchoolScheduleApp.Data.Entites
 {
     [Table("AcademicClasses")]
     public class AcademicClass

@@ -1,4 +1,4 @@
-using SchoolSchedule.Entites;
+using SchoolScheduleApp.Data.Entites;
 using System;
 using System.Collections.Generic;
 using System.IO;

@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace SchoolSchedule.Entites
+namespace SchoolScheduleApp.Data.Entites
 {
     [Table("Classrooms")]
     public class Classroom

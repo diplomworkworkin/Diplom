@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using SchoolSchedule.Context;
-using SchoolSchedule.Entites;
+using SchoolScheduleApp.Data.Context;
+using SchoolScheduleApp.Data.Entites;
 using System.Linq;
 
 namespace SchoolScheduleApp.Core

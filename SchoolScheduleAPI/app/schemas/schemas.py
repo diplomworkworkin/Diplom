@@ -1,7 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional, List
+from enum import IntEnum
 
-# Subject
+class UserRole(IntEnum):
+    Admin = 0
+    Teacher = 1
+    Student = 2
+
 class SubjectBase(BaseModel):
     Name: str
 
@@ -10,10 +15,10 @@ class SubjectCreate(SubjectBase):
 
 class Subject(SubjectBase):
     Id: int
+
     class Config:
         from_attributes = True
 
-# Classroom
 class ClassroomBase(BaseModel):
     Number: str
     Capacity: Optional[int] = None
@@ -24,10 +29,10 @@ class ClassroomCreate(ClassroomBase):
 
 class Classroom(ClassroomBase):
     Id: int
+
     class Config:
         from_attributes = True
 
-# Teacher
 class TeacherBase(BaseModel):
     FullName: str
     SubjectId: Optional[int] = None
@@ -40,10 +45,10 @@ class Teacher(TeacherBase):
     Id: int
     Subject: Optional[Subject] = None
     Classroom: Optional[Classroom] = None
+
     class Config:
         from_attributes = True
 
-# AcademicClass
 class AcademicClassBase(BaseModel):
     Name: str
     StudentCount: Optional[int] = None
@@ -56,10 +61,10 @@ class AcademicClassCreate(AcademicClassBase):
 class AcademicClass(AcademicClassBase):
     Id: int
     CuratorTeacher: Optional[Teacher] = None
+
     class Config:
         from_attributes = True
 
-# Workload
 class WorkloadBase(BaseModel):
     TeacherId: int
     SubjectId: int
@@ -71,13 +76,13 @@ class WorkloadCreate(WorkloadBase):
 
 class Workload(WorkloadBase):
     Id: int
-    Teacher: Teacher
-    Subject: Subject
-    AcademicClass: AcademicClass
+    Teacher: Optional[Teacher] = None
+    Subject: Optional[Subject] = None
+    AcademicClass: Optional[AcademicClass] = None
+
     class Config:
         from_attributes = True
 
-# Lesson
 class LessonBase(BaseModel):
     DayOfWeek: int
     LessonIndex: int
@@ -91,18 +96,18 @@ class LessonCreate(LessonBase):
 
 class Lesson(LessonBase):
     Id: int
-    Teacher: Teacher
-    Subject: Subject
-    AcademicClass: AcademicClass
+    Teacher: Optional[Teacher] = None
+    Subject: Optional[Subject] = None
+    AcademicClass: Optional[AcademicClass] = None
     Classroom: Optional[Classroom] = None
+
     class Config:
         from_attributes = True
 
-# User
 class UserBase(BaseModel):
     Username: str
     FullName: str
-    Role: int
+    Role: Optional[UserRole] = UserRole.Student
     TeacherId: Optional[int] = None
     AcademicClassId: Optional[int] = None
 
@@ -111,5 +116,8 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     Id: int
+    Teacher: Optional[Teacher] = None
+    AcademicClass: Optional[AcademicClass] = None
+
     class Config:
         from_attributes = True
