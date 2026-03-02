@@ -1,5 +1,3 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using System;
@@ -8,9 +6,30 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace SchoolScheduleApp.ViewModels
 {
+    public enum MessageCategory
+    {
+        LessonReplacement,
+        ScheduleChange
+    }
+
+    public enum ReplacementMode
+    {
+        AddMyLesson,
+        ReplaceMyLesson
+    }
+
+    public enum MessageStatus
+    {
+        Pending,
+        Approved,
+        Rejected
+    }
+
     public class MessageCategoryOption
     {
         public MessageCategory Value { get; set; }
@@ -78,6 +97,7 @@ namespace SchoolScheduleApp.ViewModels
 
     public class MessagesViewModel : ViewModelBase
     {
+        private readonly ApiClient _apiClient;
         private readonly Brush _incomingBubble = (Brush)new BrushConverter().ConvertFrom("#2D4F6E");
         private readonly Brush _outgoingBubble = (Brush)new BrushConverter().ConvertFrom("#0EA5E9");
 
@@ -136,7 +156,7 @@ namespace SchoolScheduleApp.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanSendInChat));
                 OnPropertyChanged(nameof(CanModerate));
-                LoadSelectedConversationMessages();
+                _ = LoadSelectedConversationMessages();
             }
         }
 
@@ -217,23 +237,24 @@ namespace SchoolScheduleApp.ViewModels
 
         public MessagesViewModel()
         {
-            RefreshCommand = new RelayCommand(_ => LoadConversations());
+            _apiClient = new ApiClient();
+            RefreshCommand = new RelayCommand(async (param) => await LoadConversations());
             ToggleComposerCommand = new RelayCommand(_ => IsComposerOpen = !IsComposerOpen);
-            CreateRequestCommand = new RelayCommand(_ => CreateRequest());
-            SendChatMessageCommand = new RelayCommand(_ => SendChatMessage());
-            ApproveCommand = new RelayCommand(_ => ProcessRequest(true));
-            RejectCommand = new RelayCommand(_ => ProcessRequest(false));
+            CreateRequestCommand = new RelayCommand(async (param) => await CreateRequest());
+            SendChatMessageCommand = new RelayCommand(async (param) => await SendChatMessage());
+            ApproveCommand = new RelayCommand(async (param) => await ProcessRequest(true));
+            RejectCommand = new RelayCommand(async (param) => await ProcessRequest(false));
 
             SelectedCategoryOption = Categories.FirstOrDefault();
             SelectedReplacementModeOption = ReplacementModes.FirstOrDefault();
             SelectedDayOption = Days.FirstOrDefault(x => x.Value == 5) ?? Days.FirstOrDefault();
 
-            LoadTeacherClasses();
-            LoadReplacementTeachers();
-            LoadConversations();
+            _ = LoadTeacherClasses();
+            _ = LoadReplacementTeachers();
+            _ = LoadConversations();
         }
 
-        private void LoadTeacherClasses()
+        private async Task LoadTeacherClasses()
         {
             TeacherClasses.Clear();
 
@@ -243,413 +264,171 @@ namespace SchoolScheduleApp.ViewModels
             }
 
             var teacherId = UserSession.CurrentUser.TeacherId.Value;
-            using var db = new SchoolDbContext();
 
-            var classes = db.Lessons
-                .Where(x => x.TeacherId == teacherId)
-                .Include(x => x.AcademicClass)
-                .Select(x => new { x.AcademicClassId, x.AcademicClass.Name })
-                .Distinct()
-                .OrderBy(x => x.Name)
-                .ToList();
-
-            foreach (var item in classes)
+            try
             {
-                TeacherClasses.Add(new TeacherClassOption { Id = item.AcademicClassId, Name = item.Name });
-            }
+                var lessons = await _apiClient.GetLessonsAsync(teacherId: teacherId);
+                var classes = lessons
+                    .Where(x => x.AcademicClassId.HasValue)
+                    .Select(x => new { AcademicClassId = x.AcademicClassId.Value, x.AcademicClass?.Name })
+                    .Distinct()
+                    .ToList();
 
-            SelectedClassOption = TeacherClasses.FirstOrDefault();
+                foreach (var item in classes.OrderBy(x => x.Name))
+                {
+                    TeacherClasses.Add(new TeacherClassOption { Id = item.AcademicClassId, Name = item.Name });
+                }
+
+                SelectedClassOption = TeacherClasses.FirstOrDefault();
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки классов учителя из API.", ex);
+                ToastService.Show("Ошибка загрузки классов учителя. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки классов учителя.", ex);
+                ToastService.Show("Произошла ошибка при загрузке классов учителя.", "Ошибка");
+            }
         }
 
-        private void LoadReplacementTeachers()
+        private async Task LoadReplacementTeachers()
         {
             ReplacementTeachers.Clear();
 
-            using var db = new SchoolDbContext();
-            foreach (var teacher in db.Teachers.OrderBy(x => x.FullName).ToList())
+            try
             {
-                ReplacementTeachers.Add(new TeacherOption { Id = teacher.Id, Name = teacher.FullName });
-            }
+                var teachers = await _apiClient.GetTeachersAsync();
+                foreach (var teacher in teachers.OrderBy(x => x.FullName))
+                {
+                    ReplacementTeachers.Add(new TeacherOption { Id = teacher.Id, Name = teacher.FullName });
+                }
 
-            SelectedReplacementTeacherOption = ReplacementTeachers.FirstOrDefault();
+                SelectedReplacementTeacherOption = ReplacementTeachers.FirstOrDefault();
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки учителей для замены из API.", ex);
+                ToastService.Show("Ошибка загрузки учителей для замены. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки учителей для замены.", ex);
+                ToastService.Show("Произошла ошибка при загрузке учителей для замены.", "Ошибка");
+            }
         }
 
-        private void CreateRequest()
+        private async Task LoadConversations()
         {
-            if (!IsTeacher)
-            {
-                return;
-            }
+            Conversations.Clear();
+            ChatMessages.Clear();
+            SelectedConversation = null;
 
-            var user = UserSession.CurrentUser;
-            if (user == null)
+            try
             {
-                ToastService.Show("Сессия пользователя недоступна.", "Ошибка", true);
-                return;
+                // TODO: Implement API endpoint for conversations
+                // For now, mock data or skip if no API yet
+                // var conversations = await _apiClient.GetConversationsAsync();
+                // foreach (var conv in conversations)
+                // {
+                //     Conversations.Add(MapToConversationItemViewModel(conv));
+                // }
+                ToastService.Show("Функционал загрузки бесед пока не реализован через API.", "Информация");
             }
-
-            if (SelectedCategoryOption == null)
+            catch (HttpRequestException ex)
             {
-                ToastService.Show("Выберите категорию запроса.", "Проверка", true);
+                AppLogger.LogError("Ошибка загрузки бесед из API.", ex);
+                ToastService.Show("Ошибка загрузки бесед. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки бесед.", ex);
+                ToastService.Show("Произошла ошибка при загрузке бесед.", "Ошибка");
+            }
+        }
+
+        private async Task LoadSelectedConversationMessages()
+        {
+            ChatMessages.Clear();
+            if (SelectedConversation == null) return;
+
+            try
+            {
+                // TODO: Implement API endpoint for chat messages
+                // For now, mock data or skip if no API yet
+                // var messages = await _apiClient.GetChatMessagesAsync(SelectedConversation.Id);
+                // foreach (var msg in messages)
+                // {
+                //     ChatMessages.Add(MapToChatMessageViewModel(msg));
+                // }
+                ToastService.Show("Функционал загрузки сообщений беседы пока не реализован через API.", "Информация");
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError($"Ошибка загрузки сообщений для беседы {SelectedConversation.Id} из API.", ex);
+                ToastService.Show("Ошибка загрузки сообщений. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError($"Ошибка загрузки сообщений для беседы {SelectedConversation.Id}.", ex);
+                ToastService.Show("Произошла ошибка при загрузке сообщений.", "Ошибка");
+            }
+        }
+
+        private async Task CreateRequest()
+        {
+            if (UserSession.CurrentUser == null || UserSession.CurrentUser.TeacherId == null)
+            {
+                ToastService.Show("Для создания запроса необходимо быть авторизованным учителем.", "Ошибка");
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(NewRequestMessage))
             {
-                ToastService.Show("Введите сообщение для администратора.", "Проверка", true);
+                ToastService.Show("Сообщение запроса не может быть пустым.", "Ошибка");
                 return;
             }
 
-            ReplacementMode? replacementMode = null;
-            int? replacementTeacherId = null;
-            string? replacementTeacherName = null;
-            int? classId = null;
-            string? className = null;
-            int? dayOfWeek = null;
-            int? lessonIndex = null;
-
-            if (SelectedCategoryOption.Value == MessageCategory.LessonReplacement)
+            if (SelectedCategoryOption == null)
             {
-                if (SelectedReplacementModeOption == null)
-                {
-                    ToastService.Show("Выберите тип замены урока.", "Проверка", true);
-                    return;
-                }
-
-                if (SelectedClassOption == null || SelectedDayOption == null)
-                {
-                    ToastService.Show("Выберите класс и день недели.", "Проверка", true);
-                    return;
-                }
-
-                if (LessonIndex < 1 || LessonIndex > 8)
-                {
-                    ToastService.Show("Номер урока должен быть от 1 до 8.", "Проверка", true);
-                    return;
-                }
-
-                replacementMode = SelectedReplacementModeOption.Value;
-                classId = SelectedClassOption.Id;
-                className = SelectedClassOption.Name;
-                dayOfWeek = SelectedDayOption.Value;
-                lessonIndex = LessonIndex;
-
-                if (replacementMode == Core.ReplacementMode.ReplaceMyLesson)
-                {
-                    if (SelectedReplacementTeacherOption == null)
-                    {
-                        ToastService.Show("Выберите учителя для замены вашего урока.", "Проверка", true);
-                        return;
-                    }
-
-                    if (user.TeacherId == SelectedReplacementTeacherOption.Id)
-                    {
-                        ToastService.Show("Нельзя выбрать самого себя как заменяющего учителя.", "Проверка", true);
-                        return;
-                    }
-
-                    replacementTeacherId = SelectedReplacementTeacherOption.Id;
-                    replacementTeacherName = SelectedReplacementTeacherOption.Name;
-                }
+                ToastService.Show("Выберите категорию запроса.", "Ошибка");
+                return;
             }
 
-            try
-            {
-                var createdId = MessageRequestService.CreateThreadFromTeacher(
-                    user,
-                    SelectedCategoryOption.Value,
-                    NewRequestMessage,
-                    classId,
-                    className,
-                    dayOfWeek,
-                    lessonIndex,
-                    replacementMode,
-                    replacementTeacherId,
-                    replacementTeacherName);
-
-                ToastService.Show("Заявка отправлена администратору.", "Сообщения");
-                NewRequestMessage = string.Empty;
-                IsComposerOpen = false;
-                LoadConversations(createdId);
-            }
-            catch (Exception ex)
-            {
-                ToastService.Show("Не удалось отправить заявку: " + ex.Message, "Ошибка", true);
-            }
+            // TODO: Implement API endpoint for creating requests
+            // For now, mock data or skip if no API yet
+            ToastService.Show("Функционал создания запросов пока не реализован через API.", "Информация");
+            IsComposerOpen = false;
+            NewRequestMessage = string.Empty;
+            // await LoadConversations();
         }
 
-        private void SendChatMessage()
+        private async Task SendChatMessage()
         {
-            if (SelectedConversation == null)
-            {
-                ToastService.Show("Выберите чат.", "Проверка", true);
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(ChatInput))
+            if (SelectedConversation == null || string.IsNullOrWhiteSpace(ChatInput))
             {
                 return;
             }
 
-            var sent = false;
-            if (IsTeacher)
-            {
-                var user = UserSession.CurrentUser;
-                if (user == null)
-                {
-                    ToastService.Show("Сессия пользователя недоступна.", "Ошибка", true);
-                    return;
-                }
-
-                sent = MessageRequestService.AddTeacherMessage(SelectedConversation.Id, user, ChatInput);
-            }
-            else if (IsAdmin)
-            {
-                var adminName = UserSession.CurrentUser?.FullName ?? "Администратор";
-                sent = MessageRequestService.AddAdminMessage(SelectedConversation.Id, adminName, ChatInput);
-            }
-
-            if (!sent)
-            {
-                ToastService.Show("Не удалось отправить сообщение.", "Ошибка", true);
-                return;
-            }
-
+            // TODO: Implement API endpoint for sending chat messages
+            // For now, mock data or skip if no API yet
+            ToastService.Show("Функционал отправки сообщений пока не реализован через API.", "Информация");
             ChatInput = string.Empty;
-            LoadConversations(SelectedConversation.Id);
+            // await LoadSelectedConversationMessages();
         }
 
-        private void ProcessRequest(bool approve)
+        private async Task ProcessRequest(bool approve)
         {
-            if (!IsAdmin || SelectedConversation == null)
+            if (SelectedConversation == null || !IsAdmin)
             {
                 return;
             }
 
-            if (SelectedConversation.Status != MessageStatus.Pending)
-            {
-                ToastService.Show("Заявка уже обработана.", "Информация");
-                return;
-            }
-
-            try
-            {
-                if (approve && SelectedConversation.Category == MessageCategory.LessonReplacement)
-                {
-                    ApplyLessonReplacement(SelectedConversation);
-                }
-
-                var adminName = UserSession.CurrentUser?.FullName ?? "Администратор";
-                var phrase = approve ? "Принять заявку" : "Отклонить заявку";
-                MessageRequestService.AddAdminMessage(SelectedConversation.Id, adminName, phrase);
-
-                var statusUpdated = MessageRequestService.UpdateStatus(
-                    SelectedConversation.Id,
-                    approve ? MessageStatus.Approved : MessageStatus.Rejected);
-
-                if (!statusUpdated)
-                {
-                    ToastService.Show("Не удалось обновить статус заявки.", "Ошибка", true);
-                    return;
-                }
-
-                ToastService.Show(approve ? "Заявка принята." : "Заявка отклонена.", "Сообщения");
-                LoadConversations(SelectedConversation.Id);
-            }
-            catch (Exception ex)
-            {
-                ToastService.Show("Не удалось обработать заявку: " + ex.Message, "Ошибка", true);
-            }
+            // TODO: Implement API endpoint for approving/rejecting requests
+            // For now, mock data or skip if no API yet
+            ToastService.Show($"Функционал {(approve ? "одобрения" : "отклонения")} запросов пока не реализован через API.", "Информация");
+            // await LoadConversations();
         }
-
-        private void ApplyLessonReplacement(ConversationItemViewModel conversation)
-        {
-            if (conversation.TargetClassId == null
-                || conversation.TargetDayOfWeek == null
-                || conversation.TargetLessonIndex == null)
-            {
-                throw new InvalidOperationException("В заявке на замену отсутствуют класс, день недели или номер урока.");
-            }
-
-            using var db = new SchoolDbContext();
-
-            var sourceTeacher = db.Teachers.FirstOrDefault(t => t.Id == conversation.TeacherId);
-            if (sourceTeacher == null)
-            {
-                throw new InvalidOperationException("Учитель-инициатор заявки не найден.");
-            }
-
-            var lesson = db.Lessons.FirstOrDefault(l =>
-                l.AcademicClassId == conversation.TargetClassId.Value
-                && l.DayOfWeek == conversation.TargetDayOfWeek.Value
-                && l.LessonIndex == conversation.TargetLessonIndex.Value);
-
-            if (lesson == null)
-            {
-                throw new InvalidOperationException("Урок для замены не найден (класс/день/номер урока).");
-            }
-
-            var assignedTeacherId = sourceTeacher.Id;
-            if (conversation.ReplacementMode == Core.ReplacementMode.ReplaceMyLesson)
-            {
-                if (!conversation.ReplacementTeacherId.HasValue)
-                {
-                    throw new InvalidOperationException("Не указан учитель для замены.");
-                }
-
-                assignedTeacherId = conversation.ReplacementTeacherId.Value;
-            }
-
-            var assignedTeacher = db.Teachers.FirstOrDefault(t => t.Id == assignedTeacherId);
-            if (assignedTeacher == null)
-            {
-                throw new InvalidOperationException("Назначаемый учитель не найден.");
-            }
-
-            var teacherBusy = db.Lessons.Any(l =>
-                l.TeacherId == assignedTeacherId
-                && l.DayOfWeek == lesson.DayOfWeek
-                && l.LessonIndex == lesson.LessonIndex
-                && l.Id != lesson.Id);
-
-            if (teacherBusy)
-            {
-                throw new InvalidOperationException("Выбранный учитель уже занят в это время.");
-            }
-
-            lesson.TeacherId = assignedTeacherId;
-            if (assignedTeacher.SubjectId.HasValue)
-            {
-                lesson.SubjectId = assignedTeacher.SubjectId.Value;
-            }
-
-            db.SaveChanges();
-        }
-
-        private void LoadConversations(Guid? selectId = null)
-        {
-            Conversations.Clear();
-
-            IReadOnlyList<MessageThread> threads;
-            if (IsAdmin)
-            {
-                threads = MessageRequestService.GetForAdmin();
-                MessageRequestService.MarkAdminRead();
-            }
-            else if (IsTeacher && UserSession.CurrentUser?.TeacherId != null)
-            {
-                var teacherId = UserSession.CurrentUser.TeacherId.Value;
-                threads = MessageRequestService.GetForTeacher(teacherId);
-                MessageRequestService.MarkTeacherRead(teacherId);
-            }
-            else
-            {
-                threads = Array.Empty<MessageThread>();
-            }
-
-            foreach (var thread in threads)
-            {
-                Conversations.Add(MapConversation(thread));
-            }
-
-            SelectedConversation = selectId.HasValue
-                ? Conversations.FirstOrDefault(x => x.Id == selectId.Value)
-                : Conversations.FirstOrDefault();
-        }
-
-        private void LoadSelectedConversationMessages()
-        {
-            ChatMessages.Clear();
-
-            if (SelectedConversation == null)
-            {
-                return;
-            }
-
-            MessageThread? thread;
-            if (IsAdmin)
-            {
-                thread = MessageRequestService.GetForAdmin().FirstOrDefault(x => x.Id == SelectedConversation.Id);
-            }
-            else if (IsTeacher && UserSession.CurrentUser?.TeacherId != null)
-            {
-                var teacherId = UserSession.CurrentUser.TeacherId.Value;
-                thread = MessageRequestService.GetForTeacher(teacherId).FirstOrDefault(x => x.Id == SelectedConversation.Id);
-            }
-            else
-            {
-                thread = null;
-            }
-
-            if (thread == null)
-            {
-                return;
-            }
-
-            foreach (var message in thread.Messages.OrderBy(x => x.SentAt))
-            {
-                var fromCurrentUser = (IsTeacher && message.SenderRole == UserRole.Teacher)
-                                      || (IsAdmin && message.SenderRole == UserRole.Admin);
-
-                ChatMessages.Add(new ChatMessageViewModel
-                {
-                    Text = message.Text,
-                    Meta = $"{message.SenderName} · {message.SentAt:dd.MM.yyyy HH:mm}",
-                    Alignment = fromCurrentUser ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                    BubbleBackground = fromCurrentUser ? _outgoingBubble : _incomingBubble,
-                    BubbleForeground = Brushes.White
-                });
-            }
-        }
-
-        private ConversationItemViewModel MapConversation(MessageThread thread)
-        {
-            var last = thread.Messages.LastOrDefault()?.Text ?? string.Empty;
-
-            return new ConversationItemViewModel
-            {
-                Id = thread.Id,
-                TeacherId = thread.TeacherId,
-                Header = IsAdmin ? thread.TeacherName : "Администратор",
-                LastMessagePreview = last.Length <= 70 ? last : last[..70] + "…",
-                UpdatedAtText = thread.UpdatedAt.ToString("dd.MM HH:mm"),
-                Status = thread.Status,
-                StatusText = StatusText(thread.Status),
-                StatusBrush = StatusBrush(thread.Status),
-                Category = thread.Category,
-                CategoryText = thread.Category == MessageCategory.LessonReplacement ? "Замена урока" : "Внести изменения",
-                ReplacementMode = thread.ReplacementMode,
-                ReplacementModeText = ReplacementModeText(thread.ReplacementMode),
-                ReplacementTeacherId = thread.ReplacementTeacherId,
-                ReplacementTeacherName = thread.ReplacementTeacherName,
-                TargetClassId = thread.TargetClassId,
-                TargetClassName = thread.TargetClassName,
-                TargetDayOfWeek = thread.TargetDayOfWeek,
-                TargetLessonIndex = thread.TargetLessonIndex
-            };
-        }
-
-        private static string StatusText(MessageStatus status) => status switch
-        {
-            MessageStatus.Pending => "Ожидает",
-            MessageStatus.Approved => "Принята",
-            MessageStatus.Rejected => "Отклонена",
-            _ => "Неизвестно"
-        };
-
-        private static Brush StatusBrush(MessageStatus status) => status switch
-        {
-            MessageStatus.Pending => Brushes.Goldenrod,
-            MessageStatus.Approved => Brushes.LimeGreen,
-            MessageStatus.Rejected => Brushes.IndianRed,
-            _ => Brushes.Gray
-        };
-
-        private static string ReplacementModeText(ReplacementMode? mode) => mode switch
-        {
-            Core.ReplacementMode.AddMyLesson => "Поставить мой урок",
-            Core.ReplacementMode.ReplaceMyLesson => "Заменить мой урок",
-            _ => "—"
-        };
     }
 }

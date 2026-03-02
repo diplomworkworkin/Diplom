@@ -1,16 +1,18 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using SchoolScheduleApp.Views.Windows;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SchoolScheduleApp.ViewModels
 {
     public class StudentsViewModel : ViewModelBase
     {
+        private readonly ApiClient _apiClient;
+
         private ObservableCollection<AcademicClass> _classesList = new();
         public ObservableCollection<AcademicClass> ClassesList
         {
@@ -32,12 +34,13 @@ namespace SchoolScheduleApp.ViewModels
 
         public StudentsViewModel()
         {
-            AddClassCommand = new RelayCommand(_ => ExecuteAddClass());
-            EditClassCommand = new RelayCommand(ExecuteEditClass, CanEditOrDelete);
-            DeleteClassCommand = new RelayCommand(ExecuteDeleteClass, CanEditOrDelete);
-            RefreshClassesCommand = new RelayCommand(_ => LoadData());
+            _apiClient = new ApiClient();
+            AddClassCommand = new RelayCommand(async (param) => await ExecuteAddClass());
+            EditClassCommand = new RelayCommand(async (param) => await ExecuteEditClass(param), CanEditOrDelete);
+            DeleteClassCommand = new RelayCommand(async (param) => await ExecuteDeleteClass(param), CanEditOrDelete);
+            RefreshClassesCommand = new RelayCommand(async (param) => await LoadData());
 
-            LoadData();
+            _ = LoadData();
         }
 
         private bool CanEditOrDelete(object? obj)
@@ -46,19 +49,26 @@ namespace SchoolScheduleApp.ViewModels
             return ac != null;
         }
 
-        private void LoadData()
+        private async Task LoadData()
         {
-            using var db = new SchoolDbContext();
-
-            var classes = db.AcademicClasses
-                .Include(c => c.CuratorTeacher)
-                .OrderBy(c => c.Id)
-                .ToList();
-
-            ClassesList = new ObservableCollection<AcademicClass>(classes);
+            try
+            {
+                var classes = await _apiClient.GetAcademicClassesAsync();
+                ClassesList = new ObservableCollection<AcademicClass>(classes.OrderBy(c => c.Id));
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки классов из API.", ex);
+                ToastService.Show("Ошибка загрузки классов. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки данных для студентов.", ex);
+                ToastService.Show("Произошла ошибка при загрузке данных.", "Ошибка");
+            }
         }
 
-        private void ExecuteAddClass()
+        private async Task ExecuteAddClass()
         {
             var wnd = new ClassEditWindow(null)
             {
@@ -72,35 +82,28 @@ namespace SchoolScheduleApp.ViewModels
 
             var newClass = wnd.AcademicClass;
 
-            using var db = new SchoolDbContext();
-
-            // 1) Уникальность имени класса
-            if (db.AcademicClasses.Any(c => c.Name == newClass.Name))
+            try
             {
-                ToastService.Show("Класс с таким названием уже существует.", "Ошибка", true);
-                return;
+                // 1) Уникальность имени класса (проверяется на сервере)
+                // 2) Проверка куратора (проверяется на сервере)
+                var addedClass = await _apiClient.AddAcademicClassAsync(newClass);
+                ToastService.Show($"Класс '{addedClass.Name}' успешно добавлен.", "Успех");
+                await LoadData();
+                SelectedClass = ClassesList.FirstOrDefault(x => x.Id == addedClass.Id);
             }
-
-            // 2) Проверка куратора (не может быть куратором двух классов)
-            if (newClass.CuratorTeacherId != null)
+            catch (HttpRequestException ex)
             {
-                bool busy = db.AcademicClasses.Any(c => c.CuratorTeacherId == newClass.CuratorTeacherId);
-                if (busy)
-                {
-                    ToastService.Show("Этот учитель уже назначен куратором другого класса.", "Ошибка", true);
-                    return;
-                }
+                AppLogger.LogError("Ошибка добавления класса через API.", ex);
+                ToastService.Show($"Ошибка добавления класса: {ex.Message}", "Ошибка", true);
             }
-
-            db.AcademicClasses.Add(newClass);
-            db.SaveChanges();
-
-            // обновляем красиво и сразу с куратором
-            LoadData();
-            SelectedClass = ClassesList.FirstOrDefault(x => x.Id == newClass.Id);
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка добавления класса.", ex);
+                ToastService.Show("Произошла ошибка при добавлении класса.", "Ошибка");
+            }
         }
 
-        private void ExecuteEditClass(object? obj)
+        private async Task ExecuteEditClass(object? obj)
         {
             var ac = obj as AcademicClass ?? SelectedClass;
             if (ac == null) return;
@@ -127,57 +130,31 @@ namespace SchoolScheduleApp.ViewModels
 
             var updated = wnd.AcademicClass;
 
-            using var db = new SchoolDbContext();
-            var fromDb = db.AcademicClasses.FirstOrDefault(x => x.Id == updated.Id);
-            if (fromDb == null) return;
-
-            // 1) Уникальность имени (кроме самого себя)
-            bool nameExists = db.AcademicClasses.Any(c => c.Name == updated.Name && c.Id != updated.Id);
-            if (nameExists)
+            try
             {
-                ToastService.Show("Класс с таким названием уже существует.", "Ошибка", true);
-                return;
+                // 1) Уникальность имени (кроме самого себя) (проверяется на сервере)
+                // 2) Проверка куратора (кроме самого себя) (проверяется на сервере)
+                var updatedClass = await _apiClient.UpdateAcademicClassAsync(updated.Id, updated);
+                ToastService.Show($"Класс '{updatedClass.Name}' успешно обновлен.", "Успех");
+                await LoadData();
+                SelectedClass = ClassesList.FirstOrDefault(x => x.Id == updatedClass.Id);
             }
-
-            // 2) Проверка куратора (кроме самого себя)
-            if (updated.CuratorTeacherId != null)
+            catch (HttpRequestException ex)
             {
-                bool busy = db.AcademicClasses.Any(c =>
-                    c.CuratorTeacherId == updated.CuratorTeacherId &&
-                    c.Id != updated.Id);
-
-                if (busy)
-                {
-                    ToastService.Show("Этот учитель уже назначен куратором другого класса.", "Ошибка", true);
-                    return;
-                }
+                AppLogger.LogError("Ошибка обновления класса через API.", ex);
+                ToastService.Show($"Ошибка обновления класса: {ex.Message}", "Ошибка", true);
             }
-
-            fromDb.Name = updated.Name;
-            fromDb.StudentCount = updated.StudentCount;
-            fromDb.Shift = updated.Shift;
-            fromDb.CuratorTeacherId = updated.CuratorTeacherId;
-
-            db.SaveChanges();
-
-            LoadData();
-            SelectedClass = ClassesList.FirstOrDefault(x => x.Id == updated.Id);
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка обновления класса.", ex);
+                ToastService.Show("Произошла ошибка при обновлении класса.", "Ошибка");
+            }
         }
 
-        private void ExecuteDeleteClass(object? obj)
+        private async Task ExecuteDeleteClass(object? obj)
         {
             var ac = obj as AcademicClass ?? SelectedClass;
             if (ac == null) return;
-
-            using var db = new SchoolDbContext();
-
-            // Важное ограничение: нельзя удалить класс, если на него есть нагрузки
-            bool hasWorkloads = db.Workloads.Any(w => w.AcademicClassId == ac.Id);
-            if (hasWorkloads)
-            {
-                ToastService.Show("Нельзя удалить класс: для него уже задана нагрузка (Workload). Сначала удалите/измените нагрузку.", "Ошибка", true);
-                return;
-            }
 
             var result = MessageBox.Show(
                 $"Удалить класс \"{ac.Name}\"?",
@@ -188,14 +165,24 @@ namespace SchoolScheduleApp.ViewModels
             if (result != MessageBoxResult.Yes)
                 return;
 
-            var fromDb = db.AcademicClasses.FirstOrDefault(x => x.Id == ac.Id);
-            if (fromDb == null) return;
-
-            db.AcademicClasses.Remove(fromDb);
-            db.SaveChanges();
-
-            LoadData();
-            SelectedClass = null;
+            try
+            {
+                // Важное ограничение: нельзя удалить класс, если на него есть нагрузки (проверяется на сервере)
+                await _apiClient.DeleteAcademicClassAsync(ac.Id);
+                ToastService.Show($"Класс '{ac.Name}' успешно удален.", "Успех");
+                await LoadData();
+                SelectedClass = null;
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка удаления класса через API.", ex);
+                ToastService.Show($"Ошибка удаления класса: {ex.Message}", "Ошибка", true);
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка удаления класса.", ex);
+                ToastService.Show("Произошла ошибка при удалении класса.", "Ошибка");
+            }
         }
     }
 }

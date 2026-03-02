@@ -1,10 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SchoolScheduleApp.ViewModels
 {
@@ -31,6 +31,8 @@ namespace SchoolScheduleApp.ViewModels
 
     public class ScheduleViewModel : ViewModelBase
     {
+        private readonly ApiClient _apiClient;
+
         public RelayCommand AutoGenerateScheduleCommand { get; }
 
         public ObservableCollection<AcademicClass> Classes { get; set; } = new();
@@ -65,7 +67,7 @@ namespace SchoolScheduleApp.ViewModels
                     OnPropertyChanged(nameof(SelectedDayTabIndex));
                 }
 
-                RefreshData();
+                _ = RefreshData();
             }
         }
 
@@ -88,7 +90,7 @@ namespace SchoolScheduleApp.ViewModels
                 {
                     _selectedDay = day;
                     OnPropertyChanged(nameof(SelectedDay));
-                    RefreshData();
+                    _ = RefreshData();
                 }
             }
         }
@@ -101,22 +103,23 @@ namespace SchoolScheduleApp.ViewModels
             {
                 _selectedClassId = value;
                 OnPropertyChanged();
-                RefreshData();
+                _ = RefreshData();
             }
         }
 
         public ScheduleViewModel()
         {
-            AutoGenerateScheduleCommand = new RelayCommand(_ => ExecuteAutoGenerate());
+            _apiClient = new ApiClient();
+            AutoGenerateScheduleCommand = new RelayCommand(async (param) => await ExecuteAutoGenerate());
             UpdateWeekRange();
-            LoadClasses();
+            _ = LoadClasses();
         }
 
-        public void RefreshData()
+        public async Task RefreshData()
         {
             UpdateWeekRange();
-            LoadSchedule();
-            LoadDayGrid();
+            await LoadSchedule();
+            await LoadDayGrid();
         }
 
         private void UpdateWeekRange()
@@ -128,22 +131,34 @@ namespace SchoolScheduleApp.ViewModels
             WeekRangeText = $"Неделя: {monday:dd.MM.yyyy} – {friday:dd.MM.yyyy}";
         }
 
-        private void LoadClasses()
+        private async Task LoadClasses()
         {
-            using var db = new SchoolDbContext();
-
-            Classes = new ObservableCollection<AcademicClass>(
-                db.AcademicClasses.OrderBy(c => c.Name).ToList()
-            );
-            OnPropertyChanged(nameof(Classes));
-
-            if (Classes.Count > 0 && SelectedClassId <= 0)
+            try
             {
-                SelectedClassId = Classes[0].Id;
+                var classes = await _apiClient.GetAcademicClassesAsync();
+                Classes = new ObservableCollection<AcademicClass>(
+                    classes.OrderBy(c => c.Name).ToList()
+                );
+                OnPropertyChanged(nameof(Classes));
+
+                if (Classes.Count > 0 && SelectedClassId <= 0)
+                {
+                    SelectedClassId = Classes[0].Id;
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки классов из API.", ex);
+                ToastService.Show("Ошибка загрузки классов. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки классов.", ex);
+                ToastService.Show("Произошла ошибка при загрузке классов.", "Ошибка");
             }
         }
 
-        private void ExecuteAutoGenerate()
+        private async Task ExecuteAutoGenerate()
         {
             var confirm = MessageBox.Show(
                 "Автоматически составить расписание?\nСтарое расписание будет удалено.",
@@ -156,118 +171,131 @@ namespace SchoolScheduleApp.ViewModels
                 return;
             }
 
-            var result = ScheduleGenerator.Generate(clearOldSchedule: true);
-            RefreshData();
-
-            int lessonsForSelectedClass;
-            using (var db = new SchoolDbContext())
+            try
             {
-                lessonsForSelectedClass = db.Lessons.Count(x => x.AcademicClassId == SelectedClassId);
+                // TODO: Implement API endpoint for schedule generation
+                // For now, mock data or skip if no API yet
+                // var result = await _apiClient.GenerateScheduleAsync(clearOldSchedule: true);
+                // RefreshData();
+
+                // int lessonsForSelectedClass = (await _apiClient.GetLessonsAsync(classId: SelectedClassId)).Count();
+
+                // var message = $"Создано уроков: {result.CreatedLessons}. Для выбранного класса: {lessonsForSelectedClass}.";
+
+                // if (lessonsForSelectedClass == 0)
+                // {
+                //     message += " Нагрузка для выбранного класса не задана — расписание может быть пустым.";
+                // }
+
+                // if (result.Problems.Count > 0)
+                // {
+                //     message += $" Обнаружено проблем: {result.Problems.Count}.";
+                // }
+                // else
+                // {
+                //     message += " Генерация завершена.";
+                // }
+
+                // ToastService.Show(message, "Результат");
+                ToastService.Show("Функционал автоматической генерации расписания пока не реализован через API.", "Информация");
             }
-
-            var message = $"Создано уроков: {result.CreatedLessons}. Для выбранного класса: {lessonsForSelectedClass}.";
-
-            if (lessonsForSelectedClass == 0)
+            catch (HttpRequestException ex)
             {
-                message += " Нагрузка для выбранного класса не задана — расписание может быть пустым.";
+                AppLogger.LogError("Ошибка генерации расписания через API.", ex);
+                ToastService.Show("Ошибка генерации расписания. Проверьте подключение к API.", "Ошибка");
             }
-
-            if (result.Problems.Count > 0)
+            catch (System.Exception ex)
             {
-                message += $" Обнаружено проблем: {result.Problems.Count}.";
+                AppLogger.LogError("Ошибка генерации расписания.", ex);
+                ToastService.Show("Произошла ошибка при генерации расписания.", "Ошибка");
             }
-            else
-            {
-                message += " Генерация завершена.";
-            }
-
-            ToastService.Show(message, "Результат");
         }
 
-        private void LoadSchedule()
+        private async Task LoadSchedule()
         {
             ScheduleTable.Clear();
 
             if (SelectedClassId <= 0) return;
 
-            using var db = new SchoolDbContext();
-
-            var lessons = db.Lessons
-                .Include(x => x.Subject)
-                .Include(x => x.Teacher)
-                .Include(x => x.Classroom)
-                .Where(x => x.AcademicClassId == SelectedClassId && x.DayOfWeek == SelectedDay)
-                .OrderBy(x => x.LessonIndex)
-                .ToList();
-
-            foreach (var lesson in lessons)
+            try
             {
-                ScheduleTable.Add(new LessonRow
+                var lessons = await _apiClient.GetLessonsAsync(classId: SelectedClassId);
+
+                foreach (var lesson in lessons.Where(x => x.DayOfWeek == SelectedDay).OrderBy(x => x.LessonIndex))
                 {
-                    Day = DayToText(lesson.DayOfWeek),
-                    DayOfWeek = lesson.DayOfWeek,
-                    LessonIndex = lesson.LessonIndex,
-                    TimeRange = SchedulePresentationHelper.LessonIndexToTimeRange(lesson.LessonIndex),
-                    Subject = lesson.Subject?.Name ?? string.Empty,
-                    Teacher = lesson.Teacher?.FullName ?? string.Empty,
-                    Classroom = lesson.Classroom?.Number ?? "-"
-                });
+                    ScheduleTable.Add(new LessonRow
+                    {
+                        Day = SchedulePresentationHelper.DayToText(lesson.DayOfWeek),
+                        DayOfWeek = lesson.DayOfWeek,
+                        LessonIndex = lesson.LessonIndex,
+                        TimeRange = SchedulePresentationHelper.LessonIndexToTimeRange(lesson.LessonIndex),
+                        Subject = lesson.Subject?.Name ?? string.Empty,
+                        Teacher = lesson.Teacher?.FullName ?? string.Empty,
+                        Classroom = lesson.Classroom?.Number ?? "-"
+                    });
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки расписания из API.", ex);
+                ToastService.Show("Ошибка загрузки расписания. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки расписания.", ex);
+                ToastService.Show("Произошла ошибка при загрузке расписания.", "Ошибка");
             }
         }
 
-        private void LoadDayGrid()
+        private async Task LoadDayGrid()
         {
             DayGrid.Clear();
 
             if (SelectedClassId <= 0) return;
 
-            var selectedClass = Classes.FirstOrDefault(c => c.Id == SelectedClassId);
-            int shift = selectedClass?.Shift ?? 1;
-
-            int start = shift == 1 ? 1 : 7;
-            int end = shift == 1 ? 6 : 12;
-
-            using var db = new SchoolDbContext();
-
-            var lessons = db.Lessons
-                .Include(x => x.Subject)
-                .Include(x => x.Teacher)
-                .Include(x => x.Classroom)
-                .Where(x => x.AcademicClassId == SelectedClassId && x.DayOfWeek == SelectedDay)
-                .ToList();
-
-            int displayIndex = 1;
-            for (int idx = start; idx <= end; idx++)
+            try
             {
-                var lesson = lessons.FirstOrDefault(x => x.LessonIndex == idx);
+                var classes = await _apiClient.GetAcademicClassesAsync();
+                var selectedClass = classes.FirstOrDefault(c => c.Id == SelectedClassId);
+                int shift = selectedClass?.Shift ?? 1;
 
-                DayGrid.Add(new LessonSlot
+                int start = shift == 1 ? 1 : 7;
+                int end = shift == 1 ? 6 : 12;
+
+                var lessons = await _apiClient.GetLessonsAsync(classId: SelectedClassId);
+
+                var filteredLessons = lessons.Where(x => x.DayOfWeek == SelectedDay).ToList();
+
+                int displayIndex = 1;
+                for (int idx = start; idx <= end; idx++)
                 {
-                    DisplayIndex = displayIndex,
-                    RealLessonIndex = idx,
-                    HasLesson = lesson != null,
-                    Subject = lesson?.Subject?.Name ?? "Нет урока",
-                    Teacher = lesson?.Teacher?.FullName ?? string.Empty,
-                    Classroom = lesson?.Classroom?.Number ?? "-"
-                });
+                    var lesson = filteredLessons.FirstOrDefault(x => x.LessonIndex == idx);
 
-                displayIndex++;
+                    DayGrid.Add(new LessonSlot
+                    {
+                        DisplayIndex = displayIndex,
+                        RealLessonIndex = idx,
+                        HasLesson = lesson != null,
+                        Subject = lesson?.Subject?.Name ?? "Нет урока",
+                        Teacher = lesson?.Teacher?.FullName ?? string.Empty,
+                        Classroom = lesson?.Classroom?.Number ?? "-"
+                    });
+
+                    displayIndex++;
+                }
+
+                OnPropertyChanged(nameof(DayGrid));
             }
-
-            OnPropertyChanged(nameof(DayGrid));
-        }
-
-        private static string DayToText(int day)
-        {
-            return day switch
+            catch (HttpRequestException ex)
             {
-                1 => "Понедельник",
-                2 => "Вторник",
-                3 => "Среда",
-                4 => "Четверг",
-                5 => "Пятница",
-                _ => string.Empty
-            };
+                AppLogger.LogError("Ошибка загрузки сетки дня из API.", ex);
+                ToastService.Show("Ошибка загрузки сетки дня. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки сетки дня.", ex);
+                ToastService.Show("Произошла ошибка при загрузке сетки дня.", "Ошибка");
+            }
         }
     }
 }

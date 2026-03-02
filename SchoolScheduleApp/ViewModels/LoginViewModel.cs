@@ -1,5 +1,3 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using SchoolScheduleApp.Views;
@@ -7,12 +5,16 @@ using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace SchoolScheduleApp.ViewModels
 {
     public class LoginViewModel : ViewModelBase
     {
         private readonly AppSettings _settings;
+        private readonly ApiClient _apiClient;
         private string _username;
         private bool _rememberMe;
         private string _initialPassword = string.Empty;
@@ -48,6 +50,7 @@ namespace SchoolScheduleApp.ViewModels
         public LoginViewModel()
         {
             _settings = AppSettingsService.Load();
+            _apiClient = new ApiClient();
 
             if (_settings.RememberMe)
             {
@@ -56,10 +59,10 @@ namespace SchoolScheduleApp.ViewModels
                 RememberMe = true;
             }
 
-            LoginCommand = new RelayCommand(ExecuteLogin);
+            LoginCommand = new RelayCommand(async (param) => await ExecuteLogin(param));
         }
 
-        private void ExecuteLogin(object parameter)
+        private async Task ExecuteLogin(object parameter)
         {
             // Передача пароля из PasswordBox (MVVM хак для безопасности)
             var passwordBox = parameter as PasswordBox;
@@ -73,11 +76,9 @@ namespace SchoolScheduleApp.ViewModels
 
             try
             {
-                using var db = new SchoolDbContext();
-                var user = db.Users
-                    .Include(u => u.Teacher)
-                    .Include(u => u.AcademicClass)
-                    .FirstOrDefault(u => u.Username == Username && u.Password == password);
+                // Fetch all users and filter locally for now. Ideally, a dedicated login endpoint would be better.
+                List<User> users = await _apiClient.GetUsersAsync();
+                var user = users.FirstOrDefault(u => u.Username == Username && u.Password == password);
 
                 if (user == null)
                 {
@@ -119,10 +120,15 @@ namespace SchoolScheduleApp.ViewModels
                         window.Close();
                 }
             }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка подключения к API.", ex);
+                ErrorMessage = "Произошла ошибка подключения к серверу API. Проверьте его доступность.";
+            }
             catch (Exception ex)
             {
                 AppLogger.LogError("Ошибка авторизации.", ex);
-                ErrorMessage = "Произошла ошибка входа. Проверьте подключение к базе.";
+                ErrorMessage = "Произошла ошибка входа. Попробуйте еще раз.";
             }
         }
     }

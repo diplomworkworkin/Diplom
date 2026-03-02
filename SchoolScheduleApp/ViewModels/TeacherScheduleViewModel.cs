@@ -1,9 +1,10 @@
-﻿using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SchoolScheduleApp.ViewModels
 {
@@ -26,6 +27,8 @@ namespace SchoolScheduleApp.ViewModels
 
     public class TeacherScheduleViewModel : ViewModelBase
     {
+        private readonly ApiClient _apiClient;
+
         public ObservableCollection<FilterOption> DayOptions { get; } = new();
         public ObservableCollection<FilterOption> WeekOptions { get; } = new();
         public ObservableCollection<FilterOption> ClassOptions { get; } = new();
@@ -36,7 +39,7 @@ namespace SchoolScheduleApp.ViewModels
         public FilterOption? SelectedDay
         {
             get => _selectedDay;
-            set { _selectedDay = value; OnPropertyChanged(); LoadSchedule(); }
+            set { _selectedDay = value; OnPropertyChanged(); _ = LoadSchedule(); }
         }
 
         private FilterOption? _selectedWeek;
@@ -50,14 +53,14 @@ namespace SchoolScheduleApp.ViewModels
         public FilterOption? SelectedClass
         {
             get => _selectedClass;
-            set { _selectedClass = value; OnPropertyChanged(); LoadSchedule(); }
+            set { _selectedClass = value; OnPropertyChanged(); _ = LoadSchedule(); }
         }
 
         private FilterOption? _selectedSubject;
         public FilterOption? SelectedSubject
         {
             get => _selectedSubject;
-            set { _selectedSubject = value; OnPropertyChanged(); LoadSchedule(); }
+            set { _selectedSubject = value; OnPropertyChanged(); _ = LoadSchedule(); }
         }
 
         private string _weekRangeText = "";
@@ -78,10 +81,11 @@ namespace SchoolScheduleApp.ViewModels
 
         public TeacherScheduleViewModel()
         {
-            ResetFiltersCommand = new RelayCommand(_ => ResetFilters());
+            _apiClient = new ApiClient();
+            ResetFiltersCommand = new RelayCommand(async (param) => await ResetFilters());
             BuildDefaultFilters();
-            LoadOptions();
-            LoadSchedule();
+            _ = LoadOptions();
+            _ = LoadSchedule();
         }
 
         private void BuildDefaultFilters()
@@ -100,7 +104,7 @@ namespace SchoolScheduleApp.ViewModels
             SelectedWeek = WeekOptions.FirstOrDefault();
         }
 
-        private void LoadOptions()
+        private async Task LoadOptions()
         {
             var user = UserSession.CurrentUser;
             if (user == null || user.Role != UserRole.Teacher || user.TeacherId == null)
@@ -109,40 +113,51 @@ namespace SchoolScheduleApp.ViewModels
                 return;
             }
 
-            using var db = new SchoolDbContext();
+            try
+            {
+                var lessons = await _apiClient.GetLessonsAsync(teacherId: user.TeacherId.Value);
 
-            var classItems = db.Lessons
-                .Where(x => x.TeacherId == user.TeacherId)
-                .Select(x => x.AcademicClass)
-                .Where(x => x != null)
-                .Distinct()
-                .OrderBy(x => x!.Name)
-                .ToList();
+                var classItems = lessons
+                    .Where(x => x.AcademicClass != null)
+                    .Select(x => x.AcademicClass)
+                    .DistinctBy(x => x.Id)
+                    .OrderBy(x => x.Name)
+                    .ToList();
 
-            ClassOptions.Clear();
-            ClassOptions.Add(new FilterOption { Id = 0, Name = "Все классы" });
-            foreach (var cls in classItems)
-                ClassOptions.Add(new FilterOption { Id = cls!.Id, Name = cls.Name });
+                ClassOptions.Clear();
+                ClassOptions.Add(new FilterOption { Id = 0, Name = "Все классы" });
+                foreach (var cls in classItems)
+                    ClassOptions.Add(new FilterOption { Id = cls.Id, Name = cls.Name });
 
-            SubjectOptions.Clear();
-            SubjectOptions.Add(new FilterOption { Id = 0, Name = "Все предметы" });
-            var subjects = db.Lessons
-                .Where(x => x.TeacherId == user.TeacherId)
-                .Select(x => x.Subject)
-                .Where(x => x != null)
-                .Distinct()
-                .OrderBy(x => x!.Name)
-                .ToList();
-            foreach (var subj in subjects)
-                SubjectOptions.Add(new FilterOption { Id = subj!.Id, Name = subj.Name });
+                SubjectOptions.Clear();
+                SubjectOptions.Add(new FilterOption { Id = 0, Name = "Все предметы" });
+                var subjects = lessons
+                    .Where(x => x.Subject != null)
+                    .Select(x => x.Subject)
+                    .DistinctBy(x => x.Id)
+                    .OrderBy(x => x.Name)
+                    .ToList();
+                foreach (var subj in subjects)
+                    SubjectOptions.Add(new FilterOption { Id = subj.Id, Name = subj.Name });
 
-            SelectedClass = ClassOptions.FirstOrDefault();
-            SelectedSubject = SubjectOptions.FirstOrDefault();
+                SelectedClass = ClassOptions.FirstOrDefault();
+                SelectedSubject = SubjectOptions.FirstOrDefault();
 
-            WeekRangeText = GetCurrentWeekRange();
+                WeekRangeText = GetCurrentWeekRange();
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки опций для расписания учителя из API.", ex);
+                ErrorMessage = "Ошибка загрузки опций. Проверьте подключение к API.";
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки опций для расписания учителя.", ex);
+                ErrorMessage = "Произошла ошибка при загрузке опций.";
+            }
         }
 
-        private void LoadSchedule()
+        private async Task LoadSchedule()
         {
             WeekRangeText = GetCurrentWeekRange();
             ScheduleRows.Clear();
@@ -156,36 +171,47 @@ namespace SchoolScheduleApp.ViewModels
 
             ErrorMessage = "";
 
-            using var db = new SchoolDbContext();
-            var lessons = ScheduleQueries.BuildTeacherScheduleQuery(
-                    db,
-                    user.TeacherId.Value,
-                    SelectedDay?.Id,
-                    SelectedClass?.Id,
-                    SelectedSubject?.Id)
-                .ToList();
-
-            foreach (var l in lessons)
+            try
             {
-                ScheduleRows.Add(new TeacherScheduleRow
+                var lessons = await _apiClient.GetLessonsAsync(
+                    teacherId: user.TeacherId.Value,
+                    dayOfWeek: SelectedDay?.Id == 0 ? null : SelectedDay?.Id,
+                    classId: SelectedClass?.Id == 0 ? null : SelectedClass?.Id,
+                    subjectId: SelectedSubject?.Id == 0 ? null : SelectedSubject?.Id);
+
+                foreach (var l in lessons.OrderBy(x => x.DayOfWeek).ThenBy(x => x.LessonIndex))
                 {
-                    Day = SchedulePresentationHelper.DayToText(l.DayOfWeek),
-                    TimeRange = SchedulePresentationHelper.LessonIndexToTimeRange(l.LessonIndex),
-                    LessonIndex = l.LessonIndex,
-                    AcademicClass = l.AcademicClass?.Name ?? "",
-                    Subject = l.Subject?.Name ?? "",
-                    Classroom = l.Classroom?.Number ?? "—",
-                    Type = string.IsNullOrWhiteSpace(l.Classroom?.Type) ? "—" : l.Classroom!.Type!
-                });
+                    ScheduleRows.Add(new TeacherScheduleRow
+                    {
+                        Day = SchedulePresentationHelper.DayToText(l.DayOfWeek),
+                        TimeRange = SchedulePresentationHelper.LessonIndexToTimeRange(l.LessonIndex),
+                        LessonIndex = l.LessonIndex,
+                        AcademicClass = l.AcademicClass?.Name ?? "",
+                        Subject = l.Subject?.Name ?? "",
+                        Classroom = l.Classroom?.Number ?? "—",
+                        Type = string.IsNullOrWhiteSpace(l.Classroom?.Type) ? "—" : l.Classroom!.Type!
+                    });
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки расписания учителя из API.", ex);
+                ErrorMessage = "Ошибка загрузки расписания. Проверьте подключение к API.";
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки расписания учителя.", ex);
+                ErrorMessage = "Произошла ошибка при загрузке расписания.";
             }
         }
 
-        private void ResetFilters()
+        private async Task ResetFilters()
         {
             SelectedDay = DayOptions.FirstOrDefault();
             SelectedWeek = WeekOptions.FirstOrDefault();
             SelectedClass = ClassOptions.FirstOrDefault();
             SelectedSubject = SubjectOptions.FirstOrDefault();
+            await LoadSchedule();
         }
 
         private static string GetCurrentWeekRange()

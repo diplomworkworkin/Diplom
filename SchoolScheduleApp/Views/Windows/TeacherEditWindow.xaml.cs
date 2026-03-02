@@ -1,14 +1,16 @@
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SchoolScheduleApp.Views.Windows
 {
     public partial class TeacherEditWindow : Window
     {
+        private readonly ApiClient _apiClient;
         public ObservableCollection<Subject> Subjects { get; private set; } = new();
         public ObservableCollection<ClassroomOption> Classrooms { get; private set; } = new();
         public Teacher Teacher { get; }
@@ -16,44 +18,69 @@ namespace SchoolScheduleApp.Views.Windows
         public TeacherEditWindow(Teacher teacher)
         {
             InitializeComponent();
+            _apiClient = new ApiClient();
 
             Teacher = teacher ?? new Teacher();
-            LoadSubjects();
-            LoadClassrooms();
+            _ = LoadSubjects();
+            _ = LoadClassrooms();
 
             DataContext = this;
         }
 
-        private void LoadSubjects()
+        private async Task LoadSubjects()
         {
-            using var db = new SchoolDbContext();
-            Subjects = new ObservableCollection<Subject>(
-                db.Subjects.OrderBy(s => s.Name).ToList()
-            );
+            try
+            {
+                Subjects = new ObservableCollection<Subject>(
+                    (await _apiClient.GetSubjectsAsync()).OrderBy(s => s.Name).ToList()
+                );
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки предметов из API.", ex);
+                ToastService.Show("Ошибка загрузки предметов. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки предметов.", ex);
+                ToastService.Show("Произошла ошибка при загрузке предметов.", "Ошибка");
+            }
         }
 
         private void RefreshBinding()
         {
-            DataContext = null;
-            DataContext = this;
+            // DataContext = null;
+            // DataContext = this;
+            // No longer needed with async loading and OnPropertyChanged in ViewModels
         }
 
-        private void LoadClassrooms()
+        private async Task LoadClassrooms()
         {
-            using var db = new SchoolDbContext();
+            try
+            {
+                var rooms = (await _apiClient.GetClassroomsAsync())
+                    .OrderBy(c => c.Number)
+                    .Select(c => new ClassroomOption
+                    {
+                        Id = c.Id,
+                        DisplayName = string.IsNullOrWhiteSpace(c.Type)
+                            ? c.Number
+                            : $"{c.Number} ({c.Type})"
+                    })
+                    .ToList();
 
-            var rooms = db.Classrooms
-                .OrderBy(c => c.Number)
-                .Select(c => new ClassroomOption
-                {
-                    Id = c.Id,
-                    DisplayName = string.IsNullOrWhiteSpace(c.Type)
-                        ? c.Number
-                        : $"{c.Number} ({c.Type})"
-                })
-                .ToList();
-
-            Classrooms = new ObservableCollection<ClassroomOption>(rooms);
+                Classrooms = new ObservableCollection<ClassroomOption>(rooms);
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки кабинетов из API.", ex);
+                ToastService.Show("Ошибка загрузки кабинетов. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки кабинетов.", ex);
+                ToastService.Show("Произошла ошибка при загрузке кабинетов.", "Ошибка");
+            }
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
@@ -78,7 +105,7 @@ namespace SchoolScheduleApp.Views.Windows
             DialogResult = false;
         }
 
-        private void BtnAddSubject_Click(object sender, RoutedEventArgs e)
+        private async void BtnAddSubject_Click(object sender, RoutedEventArgs e)
         {
             var name = (TbNewSubject.Text ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(name))
@@ -87,26 +114,38 @@ namespace SchoolScheduleApp.Views.Windows
                 return;
             }
 
-            using var db = new SchoolDbContext();
-            if (db.Subjects.Any(s => s.Name.ToLower() == name.ToLower()))
+            try
             {
-                ToastService.Show("Такой предмет уже существует.", "Информация");
-                return;
+                var existingSubjects = await _apiClient.GetSubjectsAsync();
+                if (existingSubjects.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    ToastService.Show("Такой предмет уже существует.", "Информация");
+                    return;
+                }
+
+                var subject = new SubjectCreate { Name = name };
+                var addedSubject = await _apiClient.AddSubjectAsync(subject);
+
+                await LoadSubjects();
+                Teacher.SubjectId = addedSubject.Id;
+                TbNewSubject.Clear();
+                // RefreshBinding(); // No longer needed
+
+                ToastService.Show("Предмет успешно добавлен.");
             }
-
-            var subject = new Subject { Name = name };
-            db.Subjects.Add(subject);
-            db.SaveChanges();
-
-            LoadSubjects();
-            Teacher.SubjectId = subject.Id;
-            TbNewSubject.Clear();
-            RefreshBinding();
-
-            ToastService.Show("Предмет успешно добавлен.");
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка добавления предмета через API.", ex);
+                ToastService.Show($"Ошибка добавления предмета: {ex.Message}", "Ошибка", true);
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка добавления предмета.", ex);
+                ToastService.Show("Произошла ошибка при добавлении предмета.", "Ошибка");
+            }
         }
 
-        private void BtnAddClassroom_Click(object sender, RoutedEventArgs e)
+        private async void BtnAddClassroom_Click(object sender, RoutedEventArgs e)
         {
             var number = (TbNewRoomNumber.Text ?? string.Empty).Trim();
             var type = (TbNewRoomType.Text ?? string.Empty).Trim();
@@ -122,32 +161,44 @@ namespace SchoolScheduleApp.Views.Windows
                 return;
             }
 
-            using var db = new SchoolDbContext();
-            if (db.Classrooms.Any(c => c.Number.ToLower() == number.ToLower()))
+            try
             {
-                ToastService.Show("Такой кабинет уже существует.", "Информация");
-                return;
+                var existingClassrooms = await _apiClient.GetClassroomsAsync();
+                if (existingClassrooms.Any(c => c.Number.Equals(number, StringComparison.OrdinalIgnoreCase)))
+                {
+                    ToastService.Show("Такой кабинет уже существует.", "Информация");
+                    return;
+                }
+
+                var classroom = new ClassroomCreate
+                {
+                    Number = number,
+                    Type = string.IsNullOrWhiteSpace(type) ? null : type,
+                    Capacity = capacity
+                };
+
+                var addedClassroom = await _apiClient.AddClassroomAsync(classroom);
+
+                Teacher.ClassroomId = addedClassroom.Id;
+                await LoadClassrooms();
+                // RefreshBinding(); // No longer needed
+
+                TbNewRoomNumber.Clear();
+                TbNewRoomType.Clear();
+                TbNewRoomCapacity.Clear();
+
+                ToastService.Show("Кабинет добавлен.");
             }
-
-            var classroom = new Classroom
+            catch (HttpRequestException ex)
             {
-                Number = number,
-                Type = string.IsNullOrWhiteSpace(type) ? null : type,
-                Capacity = capacity
-            };
-
-            db.Classrooms.Add(classroom);
-            db.SaveChanges();
-
-            Teacher.ClassroomId = classroom.Id;
-            LoadClassrooms();
-            RefreshBinding();
-
-            TbNewRoomNumber.Clear();
-            TbNewRoomType.Clear();
-            TbNewRoomCapacity.Clear();
-
-            ToastService.Show("Кабинет добавлен.");
+                AppLogger.LogError("Ошибка добавления кабинета через API.", ex);
+                ToastService.Show($"Ошибка добавления кабинета: {ex.Message}", "Ошибка", true);
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка добавления кабинета.", ex);
+                ToastService.Show("Произошла ошибка при добавлении кабинета.", "Ошибка");
+            }
         }
 
         public sealed class ClassroomOption

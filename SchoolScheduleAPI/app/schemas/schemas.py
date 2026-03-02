@@ -121,3 +121,7 @@ class User(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserLogin(BaseModel):
+    Username: str
+    Password: str

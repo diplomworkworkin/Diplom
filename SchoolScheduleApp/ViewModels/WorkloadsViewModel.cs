@@ -1,14 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
+using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SchoolScheduleApp.ViewModels
 {
@@ -17,19 +13,21 @@ namespace SchoolScheduleApp.ViewModels
         public int Id { get; set; }
 
         public int AcademicClassId { get; set; }
-        public string ClassName { get; set; }
+        public string ClassName { get; set; } = string.Empty;
 
         public int TeacherId { get; set; }
-        public string TeacherName { get; set; }
+        public string TeacherName { get; set; } = string.Empty;
 
         public int SubjectId { get; set; }
-        public string SubjectName { get; set; }
+        public string SubjectName { get; set; } = string.Empty;
 
         public int HoursPerWeek { get; set; }
     }
 
     public class WorkloadsViewModel : ViewModelBase
     {
+        private readonly ApiClient _apiClient;
+
         public ObservableCollection<WorkloadRow> Workloads { get; set; } = new();
 
         public ObservableCollection<AcademicClass> Classes { get; set; } = new();
@@ -53,14 +51,14 @@ namespace SchoolScheduleApp.ViewModels
         public int FormClassId
         {
             get => _formClassId;
-            set { _formClassId = value; OnPropertyChanged(); AutoSetSubjectFromTeacher(); }
+            set { _formClassId = value; OnPropertyChanged(); _ = AutoSetSubjectFromTeacher(); }
         }
 
         private int _formTeacherId;
         public int FormTeacherId
         {
             get => _formTeacherId;
-            set { _formTeacherId = value; OnPropertyChanged(); AutoSetSubjectFromTeacher(); }
+            set { _formTeacherId = value; OnPropertyChanged(); _ = AutoSetSubjectFromTeacher(); }
         }
 
         private int _formSubjectId;
@@ -86,58 +84,56 @@ namespace SchoolScheduleApp.ViewModels
 
         public WorkloadsViewModel()
         {
-            NewCommand = new RelayCommand(_ => ClearForm());
-            SaveCommand = new RelayCommand(_ => SaveWorkload());
-            DeleteCommand = new RelayCommand(_ => DeleteWorkload(), _ => SelectedWorkload != null);
-            RefreshCommand = new RelayCommand(_ => LoadAll());
+            _apiClient = new ApiClient();
+            NewCommand = new RelayCommand((param) => ClearForm());
+            SaveCommand = new RelayCommand(async (param) => await SaveWorkload());
+            DeleteCommand = new RelayCommand(async (param) => await DeleteWorkload(), (param) => SelectedWorkload != null);
+            RefreshCommand = new RelayCommand(async (param) => await LoadAll());
 
-            LoadAll();
+            _ = LoadAll();
             ClearForm();
         }
 
-        private void LoadAll()
+        private async Task LoadAll()
         {
-            using var db = new SchoolDbContext();
-
-            // Проверка: предмет должен соответствовать учителю
-            // (у учителя в справочнике выбран 1 предмет)
-            var teacher = db.Teachers.FirstOrDefault(t => t.Id == FormTeacherId);
-            if (teacher != null && teacher.SubjectId != null && teacher.SubjectId.Value != FormSubjectId)
+            try
             {
-                ToastService.Show("Выбранный предмет не соответствует предмету учителя. Проверьте предмет у учителя в разделе \"Учителя\" или выберите другого учителя.", "Ошибка", true);
-                return;
+                Classes = new ObservableCollection<AcademicClass>((await _apiClient.GetAcademicClassesAsync()).OrderBy(x => x.Name).ToList());
+                Teachers = new ObservableCollection<Teacher>((await _apiClient.GetTeachersAsync()).OrderBy(x => x.FullName).ToList());
+                Subjects = new ObservableCollection<Subject>((await _apiClient.GetSubjectsAsync()).OrderBy(x => x.Name).ToList());
+
+                OnPropertyChanged(nameof(Classes));
+                OnPropertyChanged(nameof(Teachers));
+                OnPropertyChanged(nameof(Subjects));
+
+                var workloads = await _apiClient.GetWorkloadsAsync();
+
+                Workloads = new ObservableCollection<WorkloadRow>(
+                    workloads.Select(w => new WorkloadRow
+                    {
+                        Id = w.Id,
+                        AcademicClassId = w.AcademicClassId,
+                        ClassName = Classes.FirstOrDefault(c => c.Id == w.AcademicClassId)?.Name ?? "",
+                        TeacherId = w.TeacherId,
+                        TeacherName = Teachers.FirstOrDefault(t => t.Id == w.TeacherId)?.FullName ?? "",
+                        SubjectId = w.SubjectId,
+                        SubjectName = Subjects.FirstOrDefault(s => s.Id == w.SubjectId)?.Name ?? "",
+                        HoursPerWeek = w.HoursPerWeek
+                    })
+                );
+
+                OnPropertyChanged(nameof(Workloads));
             }
-            Classes = new ObservableCollection<AcademicClass>(db.AcademicClasses.OrderBy(x => x.Name).ToList());
-            Teachers = new ObservableCollection<Teacher>(db.Teachers.OrderBy(x => x.FullName).ToList());
-            Subjects = new ObservableCollection<Subject>(db.Subjects.OrderBy(x => x.Name).ToList());
-
-            OnPropertyChanged(nameof(Classes));
-            OnPropertyChanged(nameof(Teachers));
-            OnPropertyChanged(nameof(Subjects));
-
-            var list = db.Workloads
-                .Include(w => w.AcademicClass)
-                .Include(w => w.Teacher)
-                .Include(w => w.Subject)
-                .OrderBy(w => w.AcademicClass.Name)
-                .ThenBy(w => w.Subject.Name)
-                .ToList();
-
-            Workloads = new ObservableCollection<WorkloadRow>(
-                list.Select(w => new WorkloadRow
-                {
-                    Id = w.Id,
-                    AcademicClassId = w.AcademicClassId,
-                    ClassName = w.AcademicClass?.Name ?? "",
-                    TeacherId = w.TeacherId,
-                    TeacherName = w.Teacher?.FullName ?? "",
-                    SubjectId = w.SubjectId,
-                    SubjectName = w.Subject?.Name ?? "",
-                    HoursPerWeek = w.HoursPerWeek
-                })
-            );
-
-            OnPropertyChanged(nameof(Workloads));
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки данных для нагрузок из API.", ex);
+                ToastService.Show("Ошибка загрузки данных. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки данных для нагрузок.", ex);
+                ToastService.Show("Произошла ошибка при загрузке данных.", "Ошибка");
+            }
         }
 
         private void FillFormFromSelected()
@@ -161,12 +157,12 @@ namespace SchoolScheduleApp.ViewModels
             FormClassId = Classes.FirstOrDefault()?.Id ?? 0;
             FormTeacherId = Teachers.FirstOrDefault()?.Id ?? 0;
 
-            AutoSetSubjectFromTeacher();
+            _ = AutoSetSubjectFromTeacher();
 
             FormHoursPerWeek = 1;
         }
 
-        private void AutoSetSubjectFromTeacher()
+        private async Task AutoSetSubjectFromTeacher()
         {
             // если у учителя есть SubjectId - автоматически проставим предмет
             var t = Teachers.FirstOrDefault(x => x.Id == FormTeacherId);
@@ -182,7 +178,7 @@ namespace SchoolScheduleApp.ViewModels
             }
         }
 
-        private void SaveWorkload()
+        private async Task SaveWorkload()
         {
             if (FormClassId <= 0)
             {
@@ -207,32 +203,9 @@ namespace SchoolScheduleApp.ViewModels
                 return;
             }
 
-            using var db = new SchoolDbContext();
-
-            // Проверка: предмет должен соответствовать учителю
-            // (у учителя в справочнике выбран 1 предмет)
-            var teacher = db.Teachers.FirstOrDefault(t => t.Id == FormTeacherId);
-            if (teacher != null && teacher.SubjectId != null && teacher.SubjectId.Value != FormSubjectId)
+            try
             {
-                ToastService.Show("Выбранный предмет не соответствует предмету учителя. Проверьте предмет учителя в разделе \"Учителя\" или выберите другого учителя.", "Ошибка", true);
-                return;
-            }
-
-            // запрет дублей: одинаковые (класс + предмет) в нагрузке
-            bool duplicate = db.Workloads.Any(w =>
-                w.AcademicClassId == FormClassId &&
-                w.SubjectId == FormSubjectId &&
-                w.Id != _editingId);
-
-            if (duplicate)
-            {
-                ToastService.Show("Для этого класса нагрузка по этому предмету уже существует.", "Ошибка", true);
-                return;
-            }
-
-            if (_editingId == 0)
-            {
-                var w = new Workload
+                var newWorkload = new WorkloadCreate
                 {
                     AcademicClassId = FormClassId,
                     TeacherId = FormTeacherId,
@@ -240,28 +213,32 @@ namespace SchoolScheduleApp.ViewModels
                     HoursPerWeek = FormHoursPerWeek
                 };
 
-                db.Workloads.Add(w);
-                db.SaveChanges();
+                if (_editingId == 0)
+                {
+                    await _apiClient.AddWorkloadAsync(newWorkload);
+                }
+                else
+                {
+                    await _apiClient.UpdateWorkloadAsync(_editingId, newWorkload);
+                }
+
+                await LoadAll();
+                ClearForm();
+                ToastService.Show("Нагрузка сохранена.", "Успешно");
             }
-            else
+            catch (HttpRequestException ex)
             {
-                var w = db.Workloads.FirstOrDefault(x => x.Id == _editingId);
-                if (w == null) return;
-
-                w.AcademicClassId = FormClassId;
-                w.TeacherId = FormTeacherId;
-                w.SubjectId = FormSubjectId;
-                w.HoursPerWeek = FormHoursPerWeek;
-
-                db.SaveChanges();
+                AppLogger.LogError("Ошибка сохранения нагрузки через API.", ex);
+                ToastService.Show($"Ошибка сохранения нагрузки: {ex.Message}", "Ошибка", true);
             }
-
-            LoadAll();
-            ClearForm();
-            ToastService.Show("Нагрузка сохранена.", "Успешно");
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка сохранения нагрузки.", ex);
+                ToastService.Show("Произошла ошибка при сохранении нагрузки.", "Ошибка");
+            }
         }
 
-        private void DeleteWorkload()
+        private async Task DeleteWorkload()
         {
             if (SelectedWorkload == null) return;
 
@@ -270,16 +247,23 @@ namespace SchoolScheduleApp.ViewModels
 
             if (ok != MessageBoxResult.Yes) return;
 
-            using var db = new SchoolDbContext();
-
-            var w = db.Workloads.FirstOrDefault(x => x.Id == SelectedWorkload.Id);
-            if (w == null) return;
-
-            db.Workloads.Remove(w);
-            db.SaveChanges();
-
-            LoadAll();
-            ClearForm();
+            try
+            {
+                await _apiClient.DeleteWorkloadAsync(SelectedWorkload.Id);
+                await LoadAll();
+                ClearForm();
+                ToastService.Show("Нагрузка удалена.", "Успешно");
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка удаления нагрузки через API.", ex);
+                ToastService.Show($"Ошибка удаления нагрузки: {ex.Message}", "Ошибка", true);
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка удаления нагрузки.", ex);
+                ToastService.Show("Произошла ошибка при удалении нагрузки.", "Ошибка");
+            }
         }
     }
 }

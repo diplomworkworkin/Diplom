@@ -1,8 +1,9 @@
-﻿using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Net.Http;
 
 namespace SchoolScheduleApp.ViewModels
 {
@@ -18,6 +19,8 @@ namespace SchoolScheduleApp.ViewModels
 
     public class ClassScheduleViewModel : ViewModelBase
     {
+        private readonly ApiClient _apiClient;
+
         public ObservableCollection<FilterOption> DayOptions { get; } = new();
         public ObservableCollection<FilterOption> ClassOptions { get; } = new();
         public ObservableCollection<ClassScheduleRow> ScheduleRows { get; } = new();
@@ -26,14 +29,14 @@ namespace SchoolScheduleApp.ViewModels
         public FilterOption? SelectedDay
         {
             get => _selectedDay;
-            set { _selectedDay = value; OnPropertyChanged(); LoadSchedule(); }
+            set { _selectedDay = value; OnPropertyChanged(); _ = LoadSchedule(); }
         }
 
         private FilterOption? _selectedClass;
         public FilterOption? SelectedClass
         {
             get => _selectedClass;
-            set { _selectedClass = value; OnPropertyChanged(); LoadSchedule(); }
+            set { _selectedClass = value; OnPropertyChanged(); _ = LoadSchedule(); }
         }
 
         private string _errorMessage = "";
@@ -52,10 +55,11 @@ namespace SchoolScheduleApp.ViewModels
 
         public ClassScheduleViewModel()
         {
+            _apiClient = new ApiClient();
             UpdateWeekRange();
             BuildDefaultFilters();
-            LoadOptions();
-            LoadSchedule();
+            _ = LoadOptions();
+            _ = LoadSchedule();
         }
 
         private void UpdateWeekRange()
@@ -79,31 +83,41 @@ namespace SchoolScheduleApp.ViewModels
             SelectedDay = DayOptions.FirstOrDefault();
         }
 
-        private void LoadOptions()
+        private async Task LoadOptions()
         {
-            using var db = new SchoolDbContext();
-            var classes = db.AcademicClasses
-                .OrderBy(x => x.Name)
-                .ToList();
-
-            ClassOptions.Clear();
-            ClassOptions.Add(new FilterOption { Id = 0, Name = "Все классы" });
-            foreach (var cls in classes)
-                ClassOptions.Add(new FilterOption { Id = cls.Id, Name = cls.Name });
-
-            var user = UserSession.CurrentUser;
-            if (user?.Role == UserRole.Student && user.AcademicClassId.HasValue)
+            try
             {
-                SelectedClass = ClassOptions.FirstOrDefault(x => x.Id == user.AcademicClassId.Value)
-                    ?? ClassOptions.FirstOrDefault();
+                var classes = await _apiClient.GetAcademicClassesAsync();
+
+                ClassOptions.Clear();
+                ClassOptions.Add(new FilterOption { Id = 0, Name = "Все классы" });
+                foreach (var cls in classes.OrderBy(x => x.Name))
+                    ClassOptions.Add(new FilterOption { Id = cls.Id, Name = cls.Name });
+
+                var user = UserSession.CurrentUser;
+                if (user?.Role == UserRole.Student && user.AcademicClassId.HasValue)
+                {
+                    SelectedClass = ClassOptions.FirstOrDefault(x => x.Id == user.AcademicClassId.Value)
+                        ?? ClassOptions.FirstOrDefault();
+                }
+                else
+                {
+                    SelectedClass = ClassOptions.FirstOrDefault();
+                }
             }
-            else
+            catch (HttpRequestException ex)
             {
-                SelectedClass = ClassOptions.FirstOrDefault();
+                AppLogger.LogError("Ошибка загрузки классов из API.", ex);
+                ErrorMessage = "Ошибка загрузки классов. Проверьте подключение к API.";
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки опций для расписания классов.", ex);
+                ErrorMessage = "Произошла ошибка при загрузке опций.";
             }
         }
 
-        private void LoadSchedule()
+        private async Task LoadSchedule()
         {
             UpdateWeekRange();
             ScheduleRows.Clear();
@@ -116,24 +130,35 @@ namespace SchoolScheduleApp.ViewModels
 
             ErrorMessage = "";
 
-            using var db = new SchoolDbContext();
-            var lessons = ScheduleQueries.BuildClassScheduleQuery(
-                    db,
-                    SelectedClass.Id,
-                    SelectedDay?.Id)
-                .ToList();
-
-            foreach (var l in lessons)
+            try
             {
-                ScheduleRows.Add(new ClassScheduleRow
+                var lessons = await _apiClient.GetLessonsAsync(classId: SelectedClass.Id, teacherId: null);
+
+                foreach (var l in lessons.OrderBy(x => x.DayOfWeek).ThenBy(x => x.LessonIndex))
                 {
-                    Day = SchedulePresentationHelper.DayToText(l.DayOfWeek),
-                    TimeRange = SchedulePresentationHelper.LessonIndexToTimeRange(l.LessonIndex),
-                    LessonIndex = l.LessonIndex,
-                    Subject = l.Subject?.Name ?? "",
-                    Teacher = l.Teacher?.FullName ?? "",
-                    Classroom = l.Classroom?.Number ?? "—"
-                });
+                    if (SelectedDay?.Id == 0 || l.DayOfWeek == SelectedDay?.Id)
+                    {
+                        ScheduleRows.Add(new ClassScheduleRow
+                        {
+                            Day = SchedulePresentationHelper.DayToText(l.DayOfWeek),
+                            TimeRange = SchedulePresentationHelper.LessonIndexToTimeRange(l.LessonIndex),
+                            LessonIndex = l.LessonIndex,
+                            Subject = l.Subject?.Name ?? "",
+                            Teacher = l.Teacher?.FullName ?? "",
+                            Classroom = l.Classroom?.Number ?? "—"
+                        });
+                    }
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки расписания классов из API.", ex);
+                ErrorMessage = "Ошибка загрузки расписания. Проверьте подключение к API.";
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки расписания классов.", ex);
+                ErrorMessage = "Произошла ошибка при загрузке расписания.";
             }
         }
     }

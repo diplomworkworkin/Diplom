@@ -1,21 +1,12 @@
-﻿using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using SchoolScheduleApp.Core;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+using System.Threading.Tasks;
 
 namespace SchoolScheduleApp.Views.Windows
 {
@@ -24,38 +15,40 @@ namespace SchoolScheduleApp.Views.Windows
     /// </summary>
     public partial class ClassEditWindow : Window
     {
+        private readonly ApiClient _apiClient;
         public AcademicClass AcademicClass { get; private set; }
         public ObservableCollection<Teacher> Teachers { get; private set; } = new();
 
         public ClassEditWindow(AcademicClass? cls)
         {
             InitializeComponent();
+            _apiClient = new ApiClient();
 
             AcademicClass = cls ?? new AcademicClass { Shift = 1, StudentCount = 1 };
 
-            LoadTeachersForCurator();
+            _ = LoadTeachersForCurator();
             DataContext = this;
         }
 
-        private void LoadTeachersForCurator()
+        private async Task LoadTeachersForCurator()
         {
-            using var db = new SchoolDbContext();
-
-            // чтобы учитель не мог быть куратором 2 классов:
-            // берем тех, кто уже куратор, кроме текущего класса (если редактируем)
-            int currentClassId = AcademicClass.Id;
-
-            var busyTeacherIds = db.AcademicClasses
-                .Where(c => c.CuratorTeacherId != null && c.Id != currentClassId)
-                .Select(c => c.CuratorTeacherId!.Value)
-                .ToList();
-
-            var teachers = db.Teachers
-                .Where(t => !busyTeacherIds.Contains(t.Id))
-                .OrderBy(t => t.FullName)
-                .ToList();
-
-            Teachers = new ObservableCollection<Teacher>(teachers);
+            try
+            {
+                var allTeachers = await _apiClient.GetTeachersAsync();
+                // TODO: API должен предоставлять информацию о том, кто является куратором
+                // Пока что, просто загружаем всех учителей.
+                Teachers = new ObservableCollection<Teacher>(allTeachers.OrderBy(t => t.FullName));
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                AppLogger.LogError("Ошибка загрузки учителей для куратора из API.", ex);
+                ToastService.Show("Ошибка загрузки учителей. Проверьте подключение к API.", "Ошибка");
+            }
+            catch (System.Exception ex)
+            {
+                AppLogger.LogError("Ошибка загрузки учителей для куратора.", ex);
+                ToastService.Show("Произошла ошибка при загрузке учителей.", "Ошибка");
+            }
         }
 
         private void BtnClearCurator_Click(object sender, RoutedEventArgs e)
@@ -141,4 +134,3 @@ namespace SchoolScheduleApp.Views.Windows
         }
     }
 }
-
