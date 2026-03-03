@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Any
 from app.core.database import get_db
 from app.models.database import Subject, Teacher, AcademicClass, Classroom, Lesson, User, Workload
 from app.schemas import schemas
@@ -53,16 +53,9 @@ def create_subject(subject: schemas.SubjectCreate, db: Session = Depends(get_db)
     return db_subject
 
 # Teachers
-@app.get("/teachers/", response_model=List[schemas.Teacher])
+@app.get("/teachers-list/", response_model=List[schemas.Teacher])
 def read_teachers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(Teacher).offset(skip).limit(limit).all()
-
-@app.get("/teachers/{teacher_id}", response_model=schemas.Teacher)
-def read_teacher(teacher_id: int, db: Session = Depends(get_db)):
-    teacher = db.query(Teacher).filter(Teacher.Id == teacher_id).first()
-    if not teacher:
-        raise HTTPException(status_code=404, detail="Teacher not found")
-    return teacher
 
 @app.post("/teachers/", response_model=schemas.Teacher)
 def create_teacher(teacher: schemas.TeacherCreate, db: Session = Depends(get_db)):
@@ -70,7 +63,12 @@ def create_teacher(teacher: schemas.TeacherCreate, db: Session = Depends(get_db)
     db.add(db_teacher)
     db.commit()
     db.refresh(db_teacher)
-    return db_teacher
+    return {
+        "Id": db_teacher.Id,
+        "FullName": db_teacher.FullName,
+        "SubjectId": db_teacher.SubjectId,
+        "ClassroomId": db_teacher.ClassroomId
+    }
 
 @app.put("/teachers/{teacher_id}", response_model=schemas.Teacher)
 def update_teacher(teacher_id: int, teacher: schemas.TeacherCreate, db: Session = Depends(get_db)):
@@ -80,8 +78,12 @@ def update_teacher(teacher_id: int, teacher: schemas.TeacherCreate, db: Session 
     for key, value in teacher.model_dump().items():
         setattr(db_teacher, key, value)
     db.commit()
-    db.refresh(db_teacher)
-    return db_teacher
+    return {
+        "Id": db_teacher.Id,
+        "FullName": db_teacher.FullName,
+        "SubjectId": db_teacher.SubjectId,
+        "ClassroomId": db_teacher.ClassroomId
+    }
 
 @app.delete("/teachers/{teacher_id}")
 def delete_teacher(teacher_id: int, db: Session = Depends(get_db)):
@@ -103,27 +105,13 @@ def create_class(academic_class: schemas.AcademicClassCreate, db: Session = Depe
     db.add(db_class)
     db.commit()
     db.refresh(db_class)
-    return db_class
-
-@app.put("/classes/{class_id}", response_model=schemas.AcademicClass)
-def update_class(class_id: int, academic_class: schemas.AcademicClassCreate, db: Session = Depends(get_db)):
-    db_class = db.query(AcademicClass).filter(AcademicClass.Id == class_id).first()
-    if not db_class:
-        raise HTTPException(status_code=404, detail="Class not found")
-    for key, value in academic_class.model_dump().items():
-        setattr(db_class, key, value)
-    db.commit()
-    db.refresh(db_class)
-    return db_class
-
-@app.delete("/classes/{class_id}")
-def delete_class(class_id: int, db: Session = Depends(get_db)):
-    db_class = db.query(AcademicClass).filter(AcademicClass.Id == class_id).first()
-    if not db_class:
-        raise HTTPException(status_code=404, detail="Class not found")
-    db.delete(db_class)
-    db.commit()
-    return {"message": "Class deleted"}
+    return {
+        "Id": db_class.Id,
+        "Name": db_class.Name,
+        "StudentCount": db_class.StudentCount,
+        "Shift": db_class.Shift,
+        "CuratorTeacherId": db_class.CuratorTeacherId
+    }
 
 # Classrooms
 @app.get("/classrooms/", response_model=List[schemas.Classroom])
@@ -149,27 +137,13 @@ def create_workload(workload: schemas.WorkloadCreate, db: Session = Depends(get_
     db.add(db_workload)
     db.commit()
     db.refresh(db_workload)
-    return db_workload
-
-@app.put("/workloads/{workload_id}", response_model=schemas.Workload)
-def update_workload(workload_id: int, workload: schemas.WorkloadCreate, db: Session = Depends(get_db)):
-    db_workload = db.query(Workload).filter(Workload.Id == workload_id).first()
-    if not db_workload:
-        raise HTTPException(status_code=404, detail="Workload not found")
-    for key, value in workload.model_dump().items():
-        setattr(db_workload, key, value)
-    db.commit()
-    db.refresh(db_workload)
-    return db_workload
-
-@app.delete("/workloads/{workload_id}")
-def delete_workload(workload_id: int, db: Session = Depends(get_db)):
-    db_workload = db.query(Workload).filter(Workload.Id == workload_id).first()
-    if not db_workload:
-        raise HTTPException(status_code=404, detail="Workload not found")
-    db.delete(db_workload)
-    db.commit()
-    return {"message": "Workload deleted"}
+    return {
+        "Id": db_workload.Id,
+        "TeacherId": db_workload.TeacherId,
+        "SubjectId": db_workload.SubjectId,
+        "AcademicClassId": db_workload.AcademicClassId,
+        "HoursPerWeek": db_workload.HoursPerWeek
+    }
 
 # Lessons (Schedule)
 @app.get("/lessons/", response_model=List[schemas.Lesson])
@@ -197,7 +171,15 @@ def create_lesson(lesson: schemas.LessonCreate, db: Session = Depends(get_db)):
     db.add(db_lesson)
     db.commit()
     db.refresh(db_lesson)
-    return db_lesson
+    return {
+        "Id": db_lesson.Id,
+        "DayOfWeek": db_lesson.DayOfWeek,
+        "LessonIndex": db_lesson.LessonIndex,
+        "TeacherId": db_lesson.TeacherId,
+        "SubjectId": db_lesson.SubjectId,
+        "AcademicClassId": db_lesson.AcademicClassId,
+        "ClassroomId": db_lesson.ClassroomId
+    }
 
 # Users
 @app.get("/users/", response_model=List[schemas.User])

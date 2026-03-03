@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List, Any
 from enum import IntEnum
 
 class UserRole(IntEnum):
@@ -15,9 +15,7 @@ class SubjectCreate(SubjectBase):
 
 class Subject(SubjectBase):
     Id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ClassroomBase(BaseModel):
     Number: str
@@ -29,9 +27,7 @@ class ClassroomCreate(ClassroomBase):
 
 class Classroom(ClassroomBase):
     Id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TeacherBase(BaseModel):
     FullName: str
@@ -43,16 +39,14 @@ class TeacherCreate(TeacherBase):
 
 class Teacher(TeacherBase):
     Id: int
-    Subject: Optional[Subject] = None
-    Classroom: Optional[Classroom] = None
-
-    class Config:
-        from_attributes = True
+    Subject: Optional[Any] = None
+    Classroom: Optional[Any] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class AcademicClassBase(BaseModel):
     Name: str
-    StudentCount: Optional[int] = None
-    Shift: Optional[int] = None
+    StudentCount: int
+    Shift: int
     CuratorTeacherId: Optional[int] = None
 
 class AcademicClassCreate(AcademicClassBase):
@@ -60,10 +54,8 @@ class AcademicClassCreate(AcademicClassBase):
 
 class AcademicClass(AcademicClassBase):
     Id: int
-    CuratorTeacher: Optional[Teacher] = None
-
-    class Config:
-        from_attributes = True
+    CuratorTeacher: Optional[Any] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class WorkloadBase(BaseModel):
     TeacherId: int
@@ -76,12 +68,10 @@ class WorkloadCreate(WorkloadBase):
 
 class Workload(WorkloadBase):
     Id: int
-    Teacher: Optional[Teacher] = None
-    Subject: Optional[Subject] = None
-    AcademicClass: Optional[AcademicClass] = None
-
-    class Config:
-        from_attributes = True
+    Teacher: Optional[Any] = None
+    Subject: Optional[Any] = None
+    AcademicClass: Optional[Any] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class LessonBase(BaseModel):
     DayOfWeek: int
@@ -96,18 +86,16 @@ class LessonCreate(LessonBase):
 
 class Lesson(LessonBase):
     Id: int
-    Teacher: Optional[Teacher] = None
-    Subject: Optional[Subject] = None
-    AcademicClass: Optional[AcademicClass] = None
-    Classroom: Optional[Classroom] = None
-
-    class Config:
-        from_attributes = True
+    Teacher: Optional[Any] = None
+    Subject: Optional[Any] = None
+    AcademicClass: Optional[Any] = None
+    Classroom: Optional[Any] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class UserBase(BaseModel):
     Username: str
     FullName: str
-    Role: Optional[UserRole] = UserRole.Student
+    Role: UserRole = UserRole.Student
     TeacherId: Optional[int] = None
     AcademicClassId: Optional[int] = None
 
@@ -116,11 +104,9 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     Id: int
-    Teacher: Optional[Teacher] = None
-    AcademicClass: Optional[AcademicClass] = None
-
-    class Config:
-        from_attributes = True
+    Teacher: Optional[Any] = None
+    AcademicClass: Optional[Any] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class UserLogin(BaseModel):
     Username: str
