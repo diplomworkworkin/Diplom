@@ -1,6 +1,5 @@
 namespace SchoolScheduleApp.Core
 {
-    // Простая модель настроек (для диплома без усложнений)
     public class AppSettings
     {
         public bool IsDarkTheme { get; set; } = true;
@@ -11,7 +10,6 @@ namespace SchoolScheduleApp.Core
         public string SavedUsername { get; set; } = string.Empty;
         public string SavedPassword { get; set; } = string.Empty;
 
-        // Граница для проверки (не обязательно, но удобно)
         public int MaxLessonDuration => 120;   
     }
 }

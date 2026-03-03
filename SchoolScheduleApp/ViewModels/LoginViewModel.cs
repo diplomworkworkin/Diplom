@@ -7,7 +7,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Net.Http;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 
 namespace SchoolScheduleApp.ViewModels
 {
@@ -15,10 +14,10 @@ namespace SchoolScheduleApp.ViewModels
     {
         private readonly AppSettings _settings;
         private readonly ApiClient _apiClient;
-        private string _username;
+        private string _username = string.Empty;
         private bool _rememberMe;
         private string _initialPassword = string.Empty;
-        private string _errorMessage;
+        private string _errorMessage = string.Empty;
 
         public string Username
         {
@@ -29,7 +28,7 @@ namespace SchoolScheduleApp.ViewModels
         public string ErrorMessage
         {
             get => _errorMessage;
-            set { _errorMessage = value; OnPropertyChanged(); } // Сообщение об ошибке (красным)
+            set { _errorMessage = value; OnPropertyChanged(); }
         }
 
         public bool RememberMe
@@ -44,7 +43,6 @@ namespace SchoolScheduleApp.ViewModels
             set { _initialPassword = value; OnPropertyChanged(); }
         }
 
-        // Команда для кнопки
         public RelayCommand LoginCommand { get; }
 
         public LoginViewModel()
@@ -62,11 +60,10 @@ namespace SchoolScheduleApp.ViewModels
             LoginCommand = new RelayCommand(async (param) => await ExecuteLogin(param));
         }
 
-        private async Task ExecuteLogin(object parameter)
+        private async Task ExecuteLogin(object? parameter)
         {
-            // Передача пароля из PasswordBox (MVVM хак для безопасности)
             var passwordBox = parameter as PasswordBox;
-            var password = passwordBox?.Password;
+            var password = passwordBox?.Password ?? InitialPassword;
 
             if (string.IsNullOrEmpty(Username) || string.IsNullOrEmpty(password))
             {
@@ -76,15 +73,8 @@ namespace SchoolScheduleApp.ViewModels
 
             try
             {
-                // Fetch all users and filter locally for now. Ideally, a dedicated login endpoint would be better.
-                List<User> users = await _apiClient.GetUsersAsync();
-                var user = users.FirstOrDefault(u => u.Username == Username && u.Password == password);
-
-                if (user == null)
-                {
-                    ErrorMessage = "Неверный логин или пароль";
-                    return;
-                }
+                var loginData = new UserLogin { Username = Username, Password = password };
+                var user = await _apiClient.LoginAsync(loginData);
 
                 ErrorMessage = "";
 
@@ -123,12 +113,12 @@ namespace SchoolScheduleApp.ViewModels
             catch (HttpRequestException ex)
             {
                 AppLogger.LogError("Ошибка подключения к API.", ex);
-                ErrorMessage = "Произошла ошибка подключения к серверу API. Проверьте его доступность.";
+                ErrorMessage = "Ошибка подключения к серверу API.";
             }
             catch (Exception ex)
             {
                 AppLogger.LogError("Ошибка авторизации.", ex);
-                ErrorMessage = "Произошла ошибка входа. Попробуйте еще раз.";
+                ErrorMessage = "Неверный логин или пароль.";
             }
         }
     }

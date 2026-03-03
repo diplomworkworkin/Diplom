@@ -1,9 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Data.Entites;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace SchoolScheduleApp.Core
 {
@@ -16,157 +15,97 @@ namespace SchoolScheduleApp.Core
     public static class ScheduleGenerator
     {
         private const int DaysPerWeek = 5;
-        private const int LessonsPerShift = 6; // в смене 6 уроков
+        private const int LessonsPerShift = 6;
 
         public static event Action? ScheduleChanged;
 
-        public static ScheduleGenerateResult Generate(bool clearOldSchedule = true)
+        public static async Task<ScheduleGenerateResult> GenerateAsync(bool clearOldSchedule = true)
         {
-            using var db = new SchoolDbContext();
-            return Generate(db, clearOldSchedule);
-        }
-
-        public static ScheduleGenerateResult Generate(SchoolDbContext db, bool clearOldSchedule = true)
-        {
+            var apiClient = new ApiClient();
             var res = new ScheduleGenerateResult();
 
-            var workloads = db.Workloads
-                .Include(w => w.Subject)
-                .Include(w => w.Teacher)
-                    .ThenInclude(t => t.Classroom)
-                .Include(w => w.AcademicClass)
-                .ToList();
-
-            if (workloads.Count == 0)
+            try
             {
-                res.Problems.Add("Нет нагрузки (Workloads). Сначала заполните учебную нагрузку.");
-                return res;
-            }
+                var workloads = await apiClient.GetWorkloadsAsync();
+                var classes = await apiClient.GetAcademicClassesAsync();
+                var teachers = await apiClient.GetTeachersAsync();
+                var subjects = await apiClient.GetSubjectsAsync();
+                var rooms = await apiClient.GetClassroomsAsync();
 
-            if (clearOldSchedule)
-            {
-                db.Lessons.RemoveRange(db.Lessons);
-                db.SaveChanges();
-            }
-
-            var rooms = db.Classrooms.ToList();
-
-            // занятость
-            var busyClass = new HashSet<string>();
-            var busyTeacher = new HashSet<string>();
-            var busyRoom = new HashSet<string>();
-
-            var lessonsToCreate = new List<Lesson>();
-
-            // сначала большие нагрузки
-            var ordered = workloads.OrderByDescending(w => w.HoursPerWeek).ToList();
-
-            foreach (var w in ordered)
-            {
-                if (w.AcademicClass == null || w.Subject == null || w.Teacher == null)
+                if (workloads.Count == 0)
                 {
-                    res.Problems.Add($"Workload #{w.Id}: не хватает связей (Class/Subject/Teacher).");
-                    continue;
-                }
-
-                if (w.HoursPerWeek <= 0 || w.HoursPerWeek > DaysPerWeek * LessonsPerShift)
-                {
-                    res.Problems.Add($"Workload #{w.Id}: некорректное HoursPerWeek = {w.HoursPerWeek}.");
-                    continue;
-                }
-
-                // Проверка: предмет должен соответствовать учителю
-                // (в модели Teacher выбран один основной предмет)
-                if (w.Teacher.SubjectId != null && w.Teacher.SubjectId.Value != w.SubjectId)
-                {
-                    res.Problems.Add(
-                        $"Нагрузка #{w.Id}: предмет \"{w.Subject.Name}\" не соответствует предмету учителя \"{w.Teacher.FullName}\".");
-                    continue;
-                }
-
-                int shift = w.AcademicClass.Shift;
-                if (shift != 1 && shift != 2)
-                {
-                    res.Problems.Add($"Класс {w.AcademicClass.Name}: некорректная смена (Shift={shift}).");
-                    continue;
-                }
-
-                int startIndex = shift == 1 ? 1 : 7;
-                int endIndex = shift == 1 ? 6 : 12;
-
-                // простое правило: не ставим один предмет два раза в один день этому классу
-                var classSubjectDayUsed = new HashSet<string>();
-
-                for (int i = 0; i < w.HoursPerWeek; i++)
-                {
-                    bool ok = TryPlace(w, startIndex, endIndex, rooms,
-                        busyClass, busyTeacher, busyRoom,
-                        classSubjectDayUsed,
-                        out Lesson lesson);
-
-                    if (!ok)
-                    {
-                        res.Problems.Add($"Не удалось поставить: класс {w.AcademicClass.Name}, предмет {w.Subject.Name} (час {i + 1}/{w.HoursPerWeek}).");
-                        continue;
-                    }
-
-                    lessonsToCreate.Add(lesson);
-                }
-            }
-
-            if (lessonsToCreate.Count > 0)
-            {
-                // Доп. проверка конфликтов перед сохранением
-                var teacherConflicts = lessonsToCreate
-                    .GroupBy(l => new { l.TeacherId, l.DayOfWeek, l.LessonIndex })
-                    .Where(g => g.Count() > 1)
-                    .ToList();
-
-                var roomConflicts = lessonsToCreate
-                    .Where(l => l.ClassroomId != null)
-                    .GroupBy(l => new { l.ClassroomId, l.DayOfWeek, l.LessonIndex })
-                    .Where(g => g.Count() > 1)
-                    .ToList();
-
-                // если есть хоть один конфликт — не сохраняем
-                if (teacherConflicts.Count > 0 || roomConflicts.Count > 0)
-                {
-                    foreach (var c in teacherConflicts)
-                        res.Problems.Add($"Конфликт: учитель #{c.Key.TeacherId} ведёт 2 урока одновременно (день {c.Key.DayOfWeek}, урок {c.Key.LessonIndex}).");
-
-                    foreach (var c in roomConflicts)
-                        res.Problems.Add($"Конфликт: кабинет #{c.Key.ClassroomId} занят 2 уроками одновременно (день {c.Key.DayOfWeek}, урок {c.Key.LessonIndex}).");
-
-                    res.CreatedLessons = 0;
+                    res.Problems.Add("Нет нагрузки (Workloads). Сначала заполните учебную нагрузку.");
                     return res;
                 }
 
-                db.Lessons.AddRange(lessonsToCreate);
-                db.SaveChanges();
+                // TODO: API должен поддерживать удаление всех уроков. 
+                // Пока что мы просто будем добавлять новые.
+                // if (clearOldSchedule) { ... }
+
+                var busyClass = new HashSet<string>();
+                var busyTeacher = new HashSet<string>();
+                var busyRoom = new HashSet<string>();
+                var lessonsToCreate = new List<LessonCreate>();
+
+                var ordered = workloads.OrderByDescending(w => w.HoursPerWeek).ToList();
+
+                foreach (var w in ordered)
+                {
+                    var cls = classes.FirstOrDefault(c => c.Id == w.AcademicClassId);
+                    var teacher = teachers.FirstOrDefault(t => t.Id == w.TeacherId);
+                    var subject = subjects.FirstOrDefault(s => s.Id == w.SubjectId);
+
+                    if (cls == null || subject == null || teacher == null)
+                    {
+                        res.Problems.Add($"Workload #{w.Id}: не хватает связей.");
+                        continue;
+                    }
+
+                    int shift = cls.Shift;
+                    int startIndex = shift == 1 ? 1 : 7;
+                    int endIndex = shift == 1 ? 6 : 12;
+                    var classSubjectDayUsed = new HashSet<string>();
+
+                    for (int i = 0; i < w.HoursPerWeek; i++)
+                    {
+                        bool ok = TryPlace(w, cls, teacher, startIndex, endIndex, rooms,
+                            busyClass, busyTeacher, busyRoom, classSubjectDayUsed,
+                            out LessonCreate lesson);
+
+                        if (!ok)
+                        {
+                            res.Problems.Add($"Не удалось поставить: класс {cls.Name}, предмет {subject.Name} (час {i + 1}/{w.HoursPerWeek}).");
+                            continue;
+                        }
+
+                        lessonsToCreate.Add(lesson);
+                    }
+                }
+
+                foreach (var l in lessonsToCreate)
+                {
+                    await apiClient.AddLessonAsync(l);
+                }
+
+                res.CreatedLessons = lessonsToCreate.Count;
+                ScheduleChanged?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                res.Problems.Add($"Ошибка при генерации: {ex.Message}");
             }
 
-            res.CreatedLessons = lessonsToCreate.Count;
-            NotifyScheduleChanged();
             return res;
         }
 
-        private static void NotifyScheduleChanged()
-        {
-            ScheduleChanged?.Invoke();
-        }
-
         private static bool TryPlace(
-            Workload w,
-            int startIndex,
-            int endIndex,
-            List<Classroom> rooms,
-            HashSet<string> busyClass,
-            HashSet<string> busyTeacher,
-            HashSet<string> busyRoom,
+            Workload w, AcademicClass cls, Teacher teacher,
+            int startIndex, int endIndex, List<Classroom> rooms,
+            HashSet<string> busyClass, HashSet<string> busyTeacher, HashSet<string> busyRoom,
             HashSet<string> classSubjectDayUsed,
-            out Lesson lesson)
+            out LessonCreate lesson)
         {
-            lesson = null;
+            lesson = null!;
 
             for (int day = 1; day <= DaysPerWeek; day++)
             {
@@ -181,7 +120,7 @@ namespace SchoolScheduleApp.Core
                     string subDayKey = $"{w.AcademicClassId}-{w.SubjectId}-{day}";
                     if (classSubjectDayUsed.Contains(subDayKey)) continue;
 
-                    int? roomId = PickRoom(w, rooms, busyRoom, day, idx);
+                    int? roomId = PickRoom(cls, teacher, rooms, busyRoom, day, idx);
 
                     busyClass.Add(classKey);
                     busyTeacher.Add(teacherKey);
@@ -190,7 +129,7 @@ namespace SchoolScheduleApp.Core
                     if (roomId != null)
                         busyRoom.Add($"{roomId}-{day}-{idx}");
 
-                    lesson = new Lesson
+                    lesson = new LessonCreate
                     {
                         DayOfWeek = day,
                         LessonIndex = idx,
@@ -207,13 +146,13 @@ namespace SchoolScheduleApp.Core
             return false;
         }
 
-        private static int? PickRoom(Workload w, List<Classroom> rooms, HashSet<string> busyRoom, int day, int idx)
+        private static int? PickRoom(AcademicClass cls, Teacher teacher, List<Classroom> rooms, HashSet<string> busyRoom, int day, int idx)
         {
-            int students = w.AcademicClass?.StudentCount ?? 0;
+            int students = cls.StudentCount;
 
-            if (w.Teacher?.ClassroomId != null)
+            if (teacher.ClassroomId != null)
             {
-                var ownRoom = rooms.FirstOrDefault(r => r.Id == w.Teacher.ClassroomId.Value);
+                var ownRoom = rooms.FirstOrDefault(r => r.Id == teacher.ClassroomId.Value);
                 if (ownRoom != null)
                 {
                     var ownRoomKey = $"{ownRoom.Id}-{day}-{idx}";
@@ -227,7 +166,6 @@ namespace SchoolScheduleApp.Core
 
             foreach (var r in rooms)
             {
-                // если есть Capacity — проверим
                 if (r.Capacity > 0 && students > 0 && r.Capacity < students)
                     continue;
 

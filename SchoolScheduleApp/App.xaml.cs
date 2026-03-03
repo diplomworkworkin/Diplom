@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using SchoolScheduleApp.Data.Context;
 using SchoolScheduleApp.Core;
 using System.Windows;
 
@@ -14,16 +12,11 @@ namespace SchoolScheduleApp
         {
             base.OnStartup(e);
 
-            // 1) Применяем тему из settings.json (чтобы переключатель в настройках реально работал)
+            // 1) Применяем тему из settings.json
             var settings = AppSettingsService.Load();
             ThemeManager.SetTheme(settings.IsDarkTheme);
-
-            // При старте применяем миграции, чтобы HasData (Subjects/Teachers/Classes и т.д.) попал в БД.
-            using (var db = new SchoolDbContext())
-            {
-                db.Database.Migrate();
-            }
+            
+            AppLogger.LogInfo("Приложение запущено.");
         }
     }
-
 }

@@ -4,7 +4,7 @@ namespace SchoolScheduleApp.Core
 {
     public static class UserSession
     {
-        public static User CurrentUser { get; private set; }
+        public static User? CurrentUser { get; private set; }
 
         public static void SetUser(User user)
         {

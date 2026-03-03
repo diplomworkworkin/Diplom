@@ -10,28 +10,28 @@ namespace SchoolScheduleApp.ViewModels
     {
         private readonly ApiClient _apiClient;
 
-        private ObservableCollection<Teacher> _teachers;
+        private ObservableCollection<Teacher> _teachers = new();
         public ObservableCollection<Teacher> Teachers
         {
             get => _teachers;
             set { _teachers = value; OnPropertyChanged(); }
         }
 
-        private ObservableCollection<AcademicClass> _academicClasses;
+        private ObservableCollection<AcademicClass> _academicClasses = new();
         public ObservableCollection<AcademicClass> AcademicClasses
         {
             get => _academicClasses;
             set { _academicClasses = value; OnPropertyChanged(); }
         }
 
-        private ObservableCollection<Subject> _subjects;
+        private ObservableCollection<Subject> _subjects = new();
         public ObservableCollection<Subject> Subjects
         {
             get => _subjects;
             set { _subjects = value; OnPropertyChanged(); }
         }
 
-        private ObservableCollection<Classroom> _classrooms;
+        private ObservableCollection<Classroom> _classrooms = new();
         public ObservableCollection<Classroom> Classrooms
         {
             get => _classrooms;
@@ -44,7 +44,7 @@ namespace SchoolScheduleApp.ViewModels
         {
             _apiClient = new ApiClient();
             LoadDataCommand = new RelayCommand(async (param) => await LoadDataAsync());
-            _ = LoadDataAsync(); // Initial load
+            _ = LoadDataAsync();
         }
 
         private async Task LoadDataAsync()

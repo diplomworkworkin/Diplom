@@ -11,16 +11,12 @@ namespace SchoolScheduleApp.ViewModels
     public class WorkloadRow
     {
         public int Id { get; set; }
-
         public int AcademicClassId { get; set; }
         public string ClassName { get; set; } = string.Empty;
-
         public int TeacherId { get; set; }
         public string TeacherName { get; set; } = string.Empty;
-
         public int SubjectId { get; set; }
         public string SubjectName { get; set; } = string.Empty;
-
         public int HoursPerWeek { get; set; }
     }
 
@@ -28,11 +24,33 @@ namespace SchoolScheduleApp.ViewModels
     {
         private readonly ApiClient _apiClient;
 
-        public ObservableCollection<WorkloadRow> Workloads { get; set; } = new();
+        private ObservableCollection<WorkloadRow> _workloads = new();
+        public ObservableCollection<WorkloadRow> Workloads
+        {
+            get => _workloads;
+            set { _workloads = value; OnPropertyChanged(); }
+        }
 
-        public ObservableCollection<AcademicClass> Classes { get; set; } = new();
-        public ObservableCollection<Teacher> Teachers { get; set; } = new();
-        public ObservableCollection<Subject> Subjects { get; set; } = new();
+        private ObservableCollection<AcademicClass> _classes = new();
+        public ObservableCollection<AcademicClass> Classes
+        {
+            get => _classes;
+            set { _classes = value; OnPropertyChanged(); }
+        }
+
+        private ObservableCollection<Teacher> _teachers = new();
+        public ObservableCollection<Teacher> Teachers
+        {
+            get => _teachers;
+            set { _teachers = value; OnPropertyChanged(); }
+        }
+
+        private ObservableCollection<Subject> _subjects = new();
+        public ObservableCollection<Subject> Subjects
+        {
+            get => _subjects;
+            set { _subjects = value; OnPropertyChanged(); }
+        }
 
         private WorkloadRow? _selectedWorkload;
         public WorkloadRow? SelectedWorkload
@@ -46,19 +64,18 @@ namespace SchoolScheduleApp.ViewModels
             }
         }
 
-        // ===== Поля формы (справа/сверху) =====
         private int _formClassId;
         public int FormClassId
         {
             get => _formClassId;
-            set { _formClassId = value; OnPropertyChanged(); _ = AutoSetSubjectFromTeacher(); }
+            set { _formClassId = value; OnPropertyChanged(); AutoSetSubjectFromTeacher(); }
         }
 
         private int _formTeacherId;
         public int FormTeacherId
         {
             get => _formTeacherId;
-            set { _formTeacherId = value; OnPropertyChanged(); _ = AutoSetSubjectFromTeacher(); }
+            set { _formTeacherId = value; OnPropertyChanged(); AutoSetSubjectFromTeacher(); }
         }
 
         private int _formSubjectId;
@@ -75,7 +92,7 @@ namespace SchoolScheduleApp.ViewModels
             set { _formHoursPerWeek = value; OnPropertyChanged(); }
         }
 
-        private int _editingId = 0; // 0 = добавление, >0 = редактирование
+        private int _editingId = 0;
 
         public RelayCommand NewCommand { get; }
         public RelayCommand SaveCommand { get; }
@@ -91,23 +108,17 @@ namespace SchoolScheduleApp.ViewModels
             RefreshCommand = new RelayCommand(async (param) => await LoadAll());
 
             _ = LoadAll();
-            ClearForm();
         }
 
         private async Task LoadAll()
         {
             try
             {
-                Classes = new ObservableCollection<AcademicClass>((await _apiClient.GetAcademicClassesAsync()).OrderBy(x => x.Name).ToList());
-                Teachers = new ObservableCollection<Teacher>((await _apiClient.GetTeachersAsync()).OrderBy(x => x.FullName).ToList());
-                Subjects = new ObservableCollection<Subject>((await _apiClient.GetSubjectsAsync()).OrderBy(x => x.Name).ToList());
-
-                OnPropertyChanged(nameof(Classes));
-                OnPropertyChanged(nameof(Teachers));
-                OnPropertyChanged(nameof(Subjects));
+                Classes = new ObservableCollection<AcademicClass>((await _apiClient.GetAcademicClassesAsync()).OrderBy(x => x.Name));
+                Teachers = new ObservableCollection<Teacher>((await _apiClient.GetTeachersAsync()).OrderBy(x => x.FullName));
+                Subjects = new ObservableCollection<Subject>((await _apiClient.GetSubjectsAsync()).OrderBy(x => x.Name));
 
                 var workloads = await _apiClient.GetWorkloadsAsync();
-
                 Workloads = new ObservableCollection<WorkloadRow>(
                     workloads.Select(w => new WorkloadRow
                     {
@@ -121,13 +132,6 @@ namespace SchoolScheduleApp.ViewModels
                         HoursPerWeek = w.HoursPerWeek
                     })
                 );
-
-                OnPropertyChanged(nameof(Workloads));
-            }
-            catch (HttpRequestException ex)
-            {
-                AppLogger.LogError("Ошибка загрузки данных для нагрузок из API.", ex);
-                ToastService.Show("Ошибка загрузки данных. Проверьте подключение к API.", "Ошибка");
             }
             catch (System.Exception ex)
             {
@@ -139,9 +143,7 @@ namespace SchoolScheduleApp.ViewModels
         private void FillFormFromSelected()
         {
             if (SelectedWorkload == null) return;
-
             _editingId = SelectedWorkload.Id;
-
             FormClassId = SelectedWorkload.AcademicClassId;
             FormTeacherId = SelectedWorkload.TeacherId;
             FormSubjectId = SelectedWorkload.SubjectId;
@@ -152,51 +154,33 @@ namespace SchoolScheduleApp.ViewModels
         {
             _editingId = 0;
             SelectedWorkload = null;
-
-            // ставим по умолчанию первые элементы (если есть)
             FormClassId = Classes.FirstOrDefault()?.Id ?? 0;
             FormTeacherId = Teachers.FirstOrDefault()?.Id ?? 0;
-
-            _ = AutoSetSubjectFromTeacher();
-
+            AutoSetSubjectFromTeacher();
             FormHoursPerWeek = 1;
         }
 
-        private async Task AutoSetSubjectFromTeacher()
+        private void AutoSetSubjectFromTeacher()
         {
-            // если у учителя есть SubjectId - автоматически проставим предмет
             var t = Teachers.FirstOrDefault(x => x.Id == FormTeacherId);
-            if (t != null && t.SubjectId != null)
+            if (t?.SubjectId != null)
             {
                 FormSubjectId = t.SubjectId.Value;
             }
-            else
+            else if (FormSubjectId == 0)
             {
-                // иначе просто оставим текущий/первый
-                if (FormSubjectId == 0)
-                    FormSubjectId = Subjects.FirstOrDefault()?.Id ?? 0;
+                FormSubjectId = Subjects.FirstOrDefault()?.Id ?? 0;
             }
         }
 
         private async Task SaveWorkload()
         {
-            if (FormClassId <= 0)
+            if (FormClassId <= 0 || FormTeacherId <= 0 || FormSubjectId <= 0)
             {
-                ToastService.Show("Выберите класс.", "Ошибка", true);
-                return;
-            }
-            if (FormTeacherId <= 0)
-            {
-                ToastService.Show("Выберите учителя.", "Ошибка", true);
-                return;
-            }
-            if (FormSubjectId <= 0)
-            {
-                ToastService.Show("Выберите предмет.", "Ошибка", true);
+                ToastService.Show("Заполните все поля.", "Ошибка", true);
                 return;
             }
 
-            // разумное ограничение для недели (можешь поменять под себя)
             if (FormHoursPerWeek < 1 || FormHoursPerWeek > 10)
             {
                 ToastService.Show("Часов в неделю должно быть от 1 до 10.", "Ошибка", true);
@@ -205,7 +189,7 @@ namespace SchoolScheduleApp.ViewModels
 
             try
             {
-                var newWorkload = new WorkloadCreate
+                var workloadData = new WorkloadCreate
                 {
                     AcademicClassId = FormClassId,
                     TeacherId = FormTeacherId,
@@ -214,22 +198,13 @@ namespace SchoolScheduleApp.ViewModels
                 };
 
                 if (_editingId == 0)
-                {
-                    await _apiClient.AddWorkloadAsync(newWorkload);
-                }
+                    await _apiClient.AddWorkloadAsync(workloadData);
                 else
-                {
-                    await _apiClient.UpdateWorkloadAsync(_editingId, newWorkload);
-                }
+                    await _apiClient.UpdateWorkloadAsync(_editingId, workloadData);
 
                 await LoadAll();
                 ClearForm();
                 ToastService.Show("Нагрузка сохранена.", "Успешно");
-            }
-            catch (HttpRequestException ex)
-            {
-                AppLogger.LogError("Ошибка сохранения нагрузки через API.", ex);
-                ToastService.Show($"Ошибка сохранения нагрузки: {ex.Message}", "Ошибка", true);
             }
             catch (System.Exception ex)
             {
@@ -242,10 +217,8 @@ namespace SchoolScheduleApp.ViewModels
         {
             if (SelectedWorkload == null) return;
 
-            var ok = MessageBox.Show($"Удалить нагрузку: {SelectedWorkload.ClassName} / {SelectedWorkload.SubjectName}?",
-                "Подтверждение", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (ok != MessageBoxResult.Yes) return;
+            if (MessageBox.Show($"Удалить нагрузку?", "Подтверждение", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                return;
 
             try
             {
@@ -253,11 +226,6 @@ namespace SchoolScheduleApp.ViewModels
                 await LoadAll();
                 ClearForm();
                 ToastService.Show("Нагрузка удалена.", "Успешно");
-            }
-            catch (HttpRequestException ex)
-            {
-                AppLogger.LogError("Ошибка удаления нагрузки через API.", ex);
-                ToastService.Show($"Ошибка удаления нагрузки: {ex.Message}", "Ошибка", true);
             }
             catch (System.Exception ex)
             {

@@ -81,11 +81,10 @@ namespace SchoolScheduleApp.ViewModels
                 return;
 
             var newClass = wnd.AcademicClass;
+            if (newClass == null) return;
 
             try
             {
-                // 1) Уникальность имени класса (проверяется на сервере)
-                // 2) Проверка куратора (проверяется на сервере)
                 var addedClass = await _apiClient.AddAcademicClassAsync(newClass);
                 ToastService.Show($"Класс '{addedClass.Name}' успешно добавлен.", "Успех");
                 await LoadData();
@@ -108,7 +107,6 @@ namespace SchoolScheduleApp.ViewModels
             var ac = obj as AcademicClass ?? SelectedClass;
             if (ac == null) return;
 
-            // делаем копию, чтобы "Отмена" не меняла таблицу
             var editable = new AcademicClass
             {
                 Id = ac.Id,
@@ -129,11 +127,10 @@ namespace SchoolScheduleApp.ViewModels
                 return;
 
             var updated = wnd.AcademicClass;
+            if (updated == null) return;
 
             try
             {
-                // 1) Уникальность имени (кроме самого себя) (проверяется на сервере)
-                // 2) Проверка куратора (кроме самого себя) (проверяется на сервере)
                 var updatedClass = await _apiClient.UpdateAcademicClassAsync(updated.Id, updated);
                 ToastService.Show($"Класс '{updatedClass.Name}' успешно обновлен.", "Успех");
                 await LoadData();
@@ -167,7 +164,6 @@ namespace SchoolScheduleApp.ViewModels
 
             try
             {
-                // Важное ограничение: нельзя удалить класс, если на него есть нагрузки (проверяется на сервере)
                 await _apiClient.DeleteAcademicClassAsync(ac.Id);
                 ToastService.Show($"Класс '{ac.Name}' успешно удален.", "Успех");
                 await LoadData();
